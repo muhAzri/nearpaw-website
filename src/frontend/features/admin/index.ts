@@ -10,3 +10,5 @@ export { UsersView } from "./components/users-view";
 export { ImpactAdminView } from "./components/impact-admin-view";
 export { RegionsView } from "./components/regions-view";
 export { AdsView } from "./components/ads-view";
+export { AuditView } from "./components/audit-view";
+export { SupportInboxView } from "./components/support-inbox-view";
