@@ -1,51 +1,101 @@
 @import "tailwindcss";
 
+/*
+ * Nearpaw brand layer on top of the LIU design system:
+ * ink on white, one teal accent, pill buttons (52), cards (12), sheets (16).
+ * Teal is only ever a fill; text on it is ink. Secondary text is #6e6e6e so small text passes 4.5:1.
+ */
 :root {
+  --ink: #262626;
+  --ink-muted: #6e6e6e;
+  --icon: #838383;
   --surface: #ffffff;
-  --surface-raised: #f6f3ef;
-  --ink: #1c1917;
-  --ink-muted: #6b645d;
-  --border: #e7e1da;
-  --border-strong: #cfc6bc;
-  --accent: #ea6a1f;
-  --accent-hover: #d65d16;
-  --on-accent: #ffffff;
-  --danger: #dc2626;
-  --on-danger: #ffffff;
-}
+  --muted: #f6f6f6;
+  --table-head: #fafafa;
+  --border: rgb(0 0 0 / 0.1);
+  --border-subtle: rgb(0 0 0 / 0.05);
+  --ink-wash: rgb(38 38 38 / 0.1);
+  --scrim: rgb(38 38 38 / 0.45);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #131110;
-    --surface-raised: #1d1a18;
-    --ink: #f5f1ec;
-    --ink-muted: #a39b92;
-    --border: #2b2724;
-    --border-strong: #3d3733;
-    --accent: #f27a2f;
-    --accent-hover: #ff8c46;
-    --on-accent: #1c1917;
-  }
+  --brand: #14b8a6;
+  --brand-deep: #0e7f73;
+  --brand-wash: rgb(20 184 166 / 0.16);
+
+  --danger: #e5484d;
+  --danger-ink: #c4252a;
+  --danger-text: #db0826;
+  --danger-wash: rgb(219 8 38 / 0.1);
+  --warn: #ff8a00;
+  --warn-text: #8a4b00;
+  --warn-wash: rgb(255 138 0 / 0.16);
+  --success: #22a45d;
+  --success-text: #127a40;
+  --success-wash: rgb(34 164 93 / 0.14);
+  --notice: #fffdf0;
 }
 
 @theme inline {
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
+  --color-icon: var(--icon);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-table-head: var(--table-head);
   --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-on-accent: var(--on-accent);
+  --color-border-subtle: var(--border-subtle);
+  --color-ink-wash: var(--ink-wash);
+  --color-scrim: var(--scrim);
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-wash: var(--brand-wash);
   --color-danger: var(--danger);
-  --color-on-danger: var(--on-danger);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-text: var(--danger-text);
+  --color-danger-wash: var(--danger-wash);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-wash: var(--warn-wash);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-wash: var(--success-wash);
+  --color-notice: var(--notice);
+
+  --font-sans: var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-mochiy), var(--font-plus-jakarta), sans-serif;
+
+  /* Type scale from the design: p1 14/24, p2 13/22, p3 12/20, lead 16/28 */
+  --text-p1: 14px;
+  --text-p1--line-height: 24px;
+  --text-p2: 13px;
+  --text-p2--line-height: 22px;
+  --text-p3: 12px;
+  --text-p3--line-height: 20px;
+  --text-lead: 16px;
+  --text-lead--line-height: 28px;
+
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+  --shadow-float: 0 4px 8px rgb(38 38 38 / 0.15);
+}
+
+@utility eyebrow {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink-muted);
 }
 
 body {
   background: var(--surface);
   color: var(--ink);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 24px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
