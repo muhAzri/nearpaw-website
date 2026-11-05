@@ -9,7 +9,11 @@ Satu project Next.js 16 (App Router) untuk **website publik**, **admin website**
 | URL | Isi |
 | --- | --- |
 | `/` | Website publik (feature `landing`) |
-| `/admin` | Admin website (feature `admin`) |
+| `/impact`, `/impact/how-we-allocate`, `/impact/allocations/[id]` | Alokasi dampak (feature `impact`, `content`) |
+| `/help`, `/about`, `/privacy`, `/terms`, `/guidelines`, `/disclaimer` | Halaman statis dan legal (feature `content`) |
+| `/support`, `/privacy-requests` | Formulir publik (feature `support`) |
+| `/r/[ref]` | Halaman share laporan (feature `shared-report`) |
+| `/admin/login`, `/admin/*` | Admin website (feature `admin`) |
 | `/api/v1/*` | Backend API, dipakai juga oleh app iOS NearPaw |
 
 ## Quick start
@@ -41,8 +45,12 @@ src/
 │
 ├── frontend/
 │   ├── features/<feature>/    api/ , components/ , hooks/ , lib/ , index.ts (PUBLIC API)
-│   │   ├── landing/           website publik
-│   │   ├── admin/             shell + dashboard admin
+│   │   ├── landing/           beranda publik
+│   │   ├── impact/            halaman impact publik
+│   │   ├── content/           help, about, legal, 404
+│   │   ├── support/           form support + privacy request
+│   │   ├── shared-report/     halaman share laporan
+│   │   ├── admin/             login, shell, dan semua layar console
 │   └── shared/                ui/, lib/ (api-client, site) lintas feature
 │
 └── backend/
@@ -89,7 +97,10 @@ Frontend hanya bicara ke backend lewat HTTP `/api/v1/*` (`frontend/shared/lib/ap
 ## Catatan
 
 - Response envelope: `{ "data": ... }` atau `{ "error": { code, message, details } }`.
-- Auth belum dibuat; contoh implementasi ada di Texium (`backend/modules/auth`). `/admin` belum diproteksi.
+- Admin: login lewat `/admin/login` (email + password + kode TOTP). Token Bearer disimpan di `sessionStorage` (kedaluwarsa 8 jam); layar `/admin/*` mengarahkan ke login bila sesi tidak ada atau 401. Belum ada cookie/BFF.
+- Frontend publik mengambil data dari `/api/v1/*` di dalam `<Suspense>` (Cache Components); halaman statis tidak memanggil backend saat build.
+- Token desain (warna, font, radius) ada di `src/app/globals.css`; komponen dasar di `src/frontend/shared/ui`.
+- Teks legal bertanda `[...]` di `features/content/lib/legal-copy.ts` masih placeholder.
 
 ## Backend API (v1)
 
