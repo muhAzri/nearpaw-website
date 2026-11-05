@@ -8,7 +8,8 @@ export type DomainErrorKind =
   | "conflict"
   | "forbidden"
   | "unauthorized"
-  | "too_large";
+  | "too_large"
+  | "rate_limited";
 
 export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKind;
@@ -47,4 +48,14 @@ export class TooLargeError extends DomainError {
 export class UnauthorizedError extends DomainError {
   readonly kind = "unauthorized";
   readonly code: string = "UNAUTHORIZED";
+}
+
+export class ForbiddenError extends DomainError {
+  readonly kind = "forbidden";
+  readonly code: string = "FORBIDDEN";
+}
+
+export class RateLimitedError extends DomainError {
+  readonly kind = "rate_limited";
+  readonly code: string = "RATE_LIMITED";
 }

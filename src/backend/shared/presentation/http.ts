@@ -14,6 +14,7 @@ const STATUS_BY_KIND: Record<DomainErrorKind, number> = {
   forbidden: 403,
   unauthorized: 401,
   too_large: 413,
+  rate_limited: 429,
 };
 
 export const ok = <T>(data: T, status = 200) =>
@@ -107,4 +108,20 @@ export function parseQuery<S extends z.ZodType>(
   schema: S,
 ): z.infer<S> {
   return schema.parse(Object.fromEntries(new URL(request.url).searchParams));
+}
+
+export const noContent = () => new Response(null, { status: 204 });
+
+export function csvResponse(filename: string, rows: string[][]): Response {
+  const cell = (v: string) => {
+    // Neutralise spreadsheet formula injection, then quote.
+    const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+    return `"${safe.replaceAll('"', '""')}"`;
+  };
+  return new Response(rows.map((r) => r.map(cell).join(",")).join("\n"), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
 }
