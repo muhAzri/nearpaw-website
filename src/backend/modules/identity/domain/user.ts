@@ -1,4 +1,5 @@
 import { ValidationError } from "@/backend/shared/domain/errors";
+import type { Role } from "@/backend/shared/domain/principal";
 
 export type UserStatus = "active" | "restricted" | "suspended" | "banned" | "deleted";
 export type UserAction = "warn" | "suspend" | "ban" | "restore";
@@ -7,6 +8,8 @@ export interface User {
   readonly id: string;
   /** Pseudonymous number shown as "Community member #4821". */
   readonly publicNumber: number;
+  /** Admins sign in to the console with the same Supabase account; the role is set in the database. */
+  readonly role: Role;
   readonly displayName: string;
   readonly email: string | null;
   readonly status: UserStatus;
@@ -26,6 +29,7 @@ export const canContribute = (status: UserStatus) => status === "active";
 
 export function applyAction(user: User, action: UserAction): User {
   if (user.status === "deleted") throw new ValidationError("Deleted users cannot be moderated");
+  if (user.role === "admin") throw new ValidationError("Admin accounts cannot be moderated here");
   switch (action) {
     case "warn":
       return { ...user, warnings: user.warnings + 1 };
@@ -42,6 +46,7 @@ export function applyAction(user: User, action: UserAction): User {
 export function anonymize(user: User, now: Date): User {
   return {
     ...user,
+    role: "user",
     email: null,
     displayName: "Deleted user",
     status: "deleted",

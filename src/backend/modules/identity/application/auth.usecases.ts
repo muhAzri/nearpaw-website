@@ -3,12 +3,11 @@ import type { AuditRecorder } from "@/backend/shared/application/audit";
 import type { RateLimiter } from "@/backend/shared/application/rate-limiter";
 import { Email, maskEmail } from "@/backend/shared/domain/email";
 import { ConflictError, ForbiddenError, RateLimitedError, UnauthorizedError, ValidationError } from "@/backend/shared/domain/errors";
-import { SYSTEM_ACTOR } from "@/backend/shared/domain/principal";
 import { afterFailure, isLocked } from "../domain/login-policy";
 import { assertAcceptablePassword } from "../domain/password-policy";
 import { DEFAULT_DISPLAY_NAME, type User } from "../domain/user";
 import type { UserRepository } from "../domain/repositories";
-import { AuthProviderError, type AdminDirectory, type CredentialAuthProvider, type LoginAttemptStore, type TokenService } from "./ports";
+import { AuthProviderError, type CredentialAuthProvider, type LoginAttemptStore, type TokenService } from "./ports";
 
 export const USER_TOKEN_TTL = 30 * 24 * 3600;
 export const ADMIN_TOKEN_TTL = 8 * 3600;
@@ -63,19 +62,26 @@ export class Register {
   }
 }
 
-/** Sign in (S03). Credentials are checked by the auth provider; we then issue the app token. */
-export class SignInWithPassword {
+type Scope = "user" | "admin";
+
+/**
+ * Checks email + password with the auth provider (with lockout), then loads our profile row,
+ * creating it on the first successful sign-in. Shared by the app and the admin console.
+ */
+export class PasswordAuthenticator {
   constructor(
     private readonly users: UserRepository,
     private readonly provider: CredentialAuthProvider,
     private readonly attempts: LoginAttemptStore,
-    private readonly tokens: TokenService,
     private readonly clock: Clock,
+    /** The account with this email becomes an admin when its profile is first created. */
+    private readonly bootstrapAdminEmail: string | undefined,
+    private readonly onLockout: (scope: Scope, email: string) => Promise<void>,
   ) {}
 
-  async execute(input: { email: string; password: string }): Promise<SessionDto> {
-    const email = Email.create(input.email).value;
-    const key = `user:${email}`;
+  async authenticate(scope: Scope, rawEmail: string, password: string): Promise<User> {
+    const email = Email.create(rawEmail).value;
+    const key = `${scope}:${email}`;
     const now = this.clock.now();
     if (isLocked(this.attempts.get(key), now.getTime())) {
       throw new RateLimitedError("Too many attempts. Try again in 15 minutes.");
@@ -83,15 +89,21 @@ export class SignInWithPassword {
 
     let identity;
     try {
-      identity = await this.provider.signIn(email, input.password);
+      identity = await this.provider.signIn(email, password);
     } catch (e) {
       if (e instanceof AuthProviderError) {
         if (e.reason === "email_not_confirmed") {
           throw new EmailNotVerifiedError("Confirm your email to sign in. Check your inbox.", { email: maskEmail(email) });
         }
         if (e.reason === "invalid_credentials") {
-          this.attempts.set(key, afterFailure(this.attempts.get(key), now.getTime()));
-          throw new UnauthorizedError("Wrong email or password. Try again.");
+          const next = afterFailure(this.attempts.get(key), now.getTime());
+          this.attempts.set(key, next);
+          if (next.lockedUntil) await this.onLockout(scope, email);
+          throw new UnauthorizedError(
+            scope === "admin"
+              ? "Wrong email or password. After 5 tries the account locks for 15 minutes."
+              : "Wrong email or password. Try again.",
+          );
         }
         if (e.reason === "rate_limited") throw new RateLimitedError(GENERIC_RATE_LIMIT);
       }
@@ -99,7 +111,6 @@ export class SignInWithPassword {
     }
     this.attempts.clear(key);
 
-    // The first successful sign-in creates our profile row, keyed by the auth account id.
     let user = await this.users.findById(identity.id);
     if (user?.status === "banned") throw new ForbiddenError("This account can't be used");
     if (user?.status === "deleted") throw new UnauthorizedError("Wrong email or password. Try again.");
@@ -107,6 +118,7 @@ export class SignInWithPassword {
       user = {
         id: identity.id,
         publicNumber: await this.users.nextPublicNumber(),
+        role: this.bootstrapAdminEmail?.toLowerCase() === email ? "admin" : "user",
         displayName: DEFAULT_DISPLAY_NAME,
         email: identity.email,
         status: "active",
@@ -117,6 +129,19 @@ export class SignInWithPassword {
       };
       await this.users.save(user);
     }
+    return user;
+  }
+}
+
+/** Sign in (S03). Issues the app token. */
+export class SignInWithPassword {
+  constructor(
+    private readonly authenticator: PasswordAuthenticator,
+    private readonly tokens: TokenService,
+  ) {}
+
+  async execute(input: { email: string; password: string }): Promise<SessionDto> {
+    const user = await this.authenticator.authenticate("user", input.email, input.password);
     return {
       token: this.tokens.issue({ id: user.id, role: "user" }, USER_TOKEN_TTL),
       expiresInSeconds: USER_TOKEN_TTL,
@@ -165,39 +190,22 @@ export class ResendVerification {
   }
 }
 
+/** Admin console sign in: the same Supabase account as the app, but the profile must have the admin role. */
 export class AdminLogin {
   constructor(
-    private readonly admins: AdminDirectory,
-    private readonly attempts: LoginAttemptStore,
+    private readonly authenticator: PasswordAuthenticator,
     private readonly tokens: TokenService,
     private readonly audit: AuditRecorder,
-    private readonly clock: Clock,
   ) {}
 
-  async execute(input: { email: string; password: string; code: string }): Promise<SessionDto> {
-    const key = input.email.trim().toLowerCase();
-    const now = this.clock.now();
-    if (isLocked(this.attempts.get(key), now.getTime())) {
-      throw new RateLimitedError("Too many attempts. Try again in 15 minutes.");
+  async execute(input: { email: string; password: string }): Promise<SessionDto> {
+    const user = await this.authenticator.authenticate("admin", input.email, input.password);
+    if (user.role !== "admin" || user.status !== "active") {
+      throw new ForbiddenError("This account doesn't have admin access.");
     }
-
-    const account = this.admins.find(key);
-    // Evaluate every factor so timing doesn't reveal which one was wrong.
-    const passwordOk = account?.checkPassword(input.password) ?? false;
-    const codeOk = account?.checkTotp(input.code, now) ?? false;
-    if (!account || !passwordOk || !codeOk) {
-      const next = afterFailure(this.attempts.get(key), now.getTime());
-      this.attempts.set(key, next);
-      if (next.lockedUntil) {
-        await this.audit.record({ actor: SYSTEM_ACTOR, action: "admin.lockout", target: account?.id ?? "unknown" });
-      }
-      throw new UnauthorizedError("Wrong email, password or code. After 5 tries the account locks for 15 minutes.");
-    }
-
-    this.attempts.clear(key);
-    await this.audit.record({ actor: { kind: "admin", id: account.id }, action: "admin.login", target: account.id });
+    await this.audit.record({ actor: { kind: "admin", id: user.id }, action: "admin.login", target: user.id });
     return {
-      token: this.tokens.issue({ id: account.id, role: "admin" }, ADMIN_TOKEN_TTL),
+      token: this.tokens.issue({ id: user.id, role: "admin" }, ADMIN_TOKEN_TTL),
       expiresInSeconds: ADMIN_TOKEN_TTL,
       role: "admin",
     };

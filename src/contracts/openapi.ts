@@ -55,7 +55,7 @@ const ops: Op[] = [
   { method: "post", path: "/support", tag: "Public web", summary: "Send a support message", body: C.CreateSupportMessageSchema, status: 201 },
   { method: "post", path: "/privacy-requests", tag: "Public web", summary: "Submit a data/privacy request", body: C.CreatePrivacyRequestSchema, status: 201 },
   // ---- Admin ----
-  { method: "post", path: "/admin/auth/login", tag: "Admin: auth", summary: "Email + password + 6-digit TOTP", body: C.AdminLoginSchema },
+  { method: "post", path: "/admin/auth/login", tag: "Admin: auth", summary: "Email + password of an account with the admin role", body: C.AdminLoginSchema },
   { method: "get", path: "/admin/me", tag: "Admin: auth", summary: "Current admin", auth: "admin" },
   { method: "get", path: "/admin/dashboard", tag: "Admin: dashboard", summary: "Dashboard metrics", auth: "admin" },
   { method: "get", path: "/admin/reports", tag: "Admin: moderation", summary: "Search reports", auth: "admin", query: C.AdminReportsQuerySchema },
@@ -154,7 +154,7 @@ export function buildOpenApi(serverUrl = "") {
       version: "1.0.0",
       description:
         "Success: `{ \"data\": … }`. Errors: `{ \"error\": { code, message, details } }`. " +
-        "App tokens come from `/auth/sign-in`; admin tokens from `/admin/auth/login` (MFA).",
+        "App tokens come from `/auth/sign-in`; admin tokens from `/admin/auth/login` (account must have the admin role).",
     },
     servers: [{ url: `${serverUrl}/api/v1` }],
     tags: [...new Set(ops.map((o) => o.tag))].map((name) => ({ name })),
@@ -162,7 +162,7 @@ export function buildOpenApi(serverUrl = "") {
     components: {
       securitySchemes: {
         userBearer: { type: "http", scheme: "bearer", description: "App user token" },
-        adminBearer: { type: "http", scheme: "bearer", description: "Admin token (MFA)" },
+        adminBearer: { type: "http", scheme: "bearer", description: "Admin token" },
       },
       schemas: {
         Envelope: { type: "object", required: ["data"], properties: { data: {} } },

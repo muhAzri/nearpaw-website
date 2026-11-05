@@ -1,14 +1,16 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { AuditRecorder } from "@/backend/shared/application/audit";
+import { maskEmail } from "@/backend/shared/domain/email";
+import { SYSTEM_ACTOR } from "@/backend/shared/domain/principal";
 import { serverEnv } from "@/backend/shared/config/env";
 import { sharedRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
 import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
-import { AdminLogin, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
+import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
 import type { AccountDataCleaner, UserActivityReader } from "./application/ports";
 import { DevAuthProvider } from "./infrastructure/dev-auth.provider";
-import { EnvAdminDirectory, InMemoryLoginAttempts } from "./infrastructure/env-admin.directory";
+import { InMemoryLoginAttempts } from "./infrastructure/in-memory-login-attempts";
 import { HmacTokenService } from "./infrastructure/hmac-token.service";
 import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
@@ -36,10 +38,8 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
         ? new UnconfiguredAuthProvider()
         : singleton("dev_auth", () => new DevAuthProvider(env.NODE_ENV !== "test"));
   const limiter = sharedRateLimiter();
-  const admins = new EnvAdminDirectory({
-    email: env.ADMIN_EMAIL,
-    password: env.ADMIN_PASSWORD,
-    totpSecret: env.ADMIN_TOTP_SECRET,
+  const passwords = new PasswordAuthenticator(users, credentials, attempts, clock, env.ADMIN_EMAIL, async (scope, email) => {
+    if (scope === "admin") await deps.audit.record({ actor: SYSTEM_ACTOR, action: "admin.lockout", target: maskEmail(email) });
   });
 
   const queries = new UserQueries(users, blocks, clock);
@@ -53,6 +53,11 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
         const user = await users.findById(principal.id);
         if (!user || user.status === "deleted" || user.status === "banned") return null;
       }
+      // Admin access follows the database role, so removing it takes effect immediately.
+      if (principal.role === "admin") {
+        const admin = await users.findById(principal.id);
+        if (!admin || admin.role !== "admin" || admin.status !== "active") return null;
+      }
       return principal;
     },
   };
@@ -62,10 +67,10 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
     return new IdentityController(
       authenticator,
       new Register(credentials, limiter),
-      new SignInWithPassword(users, credentials, attempts, tokens, clock),
+      new SignInWithPassword(passwords, tokens),
       new RequestPasswordReset(credentials, limiter),
       new ResendVerification(credentials, limiter),
-      new AdminLogin(admins, attempts, tokens, deps.audit, clock),
+      new AdminLogin(passwords, tokens, deps.audit),
       new AccountService(users, blocks, late.cleaner, clock),
       new UserAdmin(users, blocks, late.activity, deps.audit),
     );

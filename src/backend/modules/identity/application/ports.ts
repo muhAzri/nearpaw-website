@@ -32,17 +32,6 @@ export interface TokenService {
   verify(token: string): Principal | null;
 }
 
-export interface AdminAccount {
-  readonly id: string;
-  checkPassword(password: string): boolean;
-  checkTotp(code: string, now: Date): boolean;
-}
-
-/** null when admin login is not configured or the email is unknown. */
-export interface AdminDirectory {
-  find(email: string): AdminAccount | null;
-}
-
 export interface LoginAttemptStore {
   get(key: string): LoginState | undefined;
   set(key: string, state: LoginState): void;

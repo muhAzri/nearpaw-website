@@ -69,7 +69,7 @@ export class IdentityController {
   // ---- admin ----
   adminMe = async (request: Request) => {
     const principal = await requireAdmin(request, this.auth);
-    return ok({ id: principal.id, role: "admin" as const, mfa: true });
+    return ok({ id: principal.id, role: "admin" as const });
   };
 
   listUsers = async (request: Request) => {

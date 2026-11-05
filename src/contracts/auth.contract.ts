@@ -21,11 +21,8 @@ export type SignInInput = z.infer<typeof SignInSchema>;
 export const EmailOnlySchema = z.object({ email: EmailSchema });
 export type EmailOnlyInput = z.infer<typeof EmailOnlySchema>;
 
-export const AdminLoginSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1).max(256),
-  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
-});
+/** Admin console sign in (A01): the same Supabase account as the app, gated by the admin role. */
+export const AdminLoginSchema = SignInSchema;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
 
 export const UpdateProfileSchema = z.object({

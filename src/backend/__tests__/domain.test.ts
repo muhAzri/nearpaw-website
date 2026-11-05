@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { totpMatches } from "../modules/identity/infrastructure/env-admin.directory";
 import { afterFailure, isLocked } from "../modules/identity/domain/login-policy";
+import { applyAction, type User } from "../modules/identity/domain/user";
 import { createReport, effectiveState, hide, restore, reportTitle } from "../modules/reports/domain/report";
 import { shouldAutoHide } from "../modules/reports/domain/flag";
 import { publish, totalsByCurrency, verify, type Allocation } from "../modules/impact/domain/impact";
@@ -60,17 +60,31 @@ describe("report domain", () => {
 });
 
 describe("admin auth", () => {
-  it("matches the RFC 6238 test vector", () => {
-    const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
-    expect(totpMatches(secret, "287082", new Date(59_000))).toBe(true);
-    expect(totpMatches(secret, "000000", new Date(59_000))).toBe(false);
-  });
-
   it("locks after 5 failures for 15 minutes", () => {
     let state = undefined as ReturnType<typeof afterFailure> | undefined;
     for (let i = 0; i < 5; i++) state = afterFailure(state, 0);
     expect(isLocked(state, 1000)).toBe(true);
     expect(isLocked(state, 16 * 60_000)).toBe(false);
+  });
+});
+
+describe("admin accounts", () => {
+  const account: User = {
+    id: "a1",
+    publicNumber: 1001,
+    role: "admin",
+    displayName: "Community member",
+    email: "admin@example.com",
+    status: "active",
+    warnings: 0,
+    createdAt: now,
+    deletedAt: null,
+    tombstoneId: null,
+  };
+
+  it("cannot be moderated like regular users", () => {
+    expect(() => applyAction(account, "ban")).toThrow("Admin accounts cannot be moderated here");
+    expect(applyAction({ ...account, role: "user" }, "ban").status).toBe("banned");
   });
 });
 

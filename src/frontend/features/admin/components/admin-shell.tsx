@@ -73,7 +73,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mt-8 hidden px-2 lg:block">
           <p className="text-p3 text-[#d9d9d9]">Signed in as</p>
-          <p className="text-p2 font-bold">Admin · MFA on</p>
+          <p className="text-p2 font-bold">Admin</p>
           <button
             type="button"
             onClick={() => {

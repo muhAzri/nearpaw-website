@@ -12,10 +12,7 @@ const ServerEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: blankAsUndefined(z.url().optional()),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: blankAsUndefined(z.string().min(1).optional()),
   /** Bootstrap admin. Admin login is disabled until all three are set. */
-  ADMIN_EMAIL: z.string().email().optional(),
-  ADMIN_PASSWORD: z.string().min(12).optional(),
-  /** Base32 TOTP secret (RFC 6238) from the admin's authenticator app. */
-  ADMIN_TOTP_SECRET: z.string().regex(/^[A-Z2-7]{16,}=*$/i).optional(),
+  ADMIN_EMAIL: blankAsUndefined(z.email().optional()),
   // Add further server-only secrets here (e.g. SUPABASE_SECRET_KEY) and validate them.
 });
 

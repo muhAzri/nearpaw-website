@@ -1,20 +1,10 @@
-import { createHmac } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // `connection()` only works inside a Next.js request; the handlers are otherwise plain.
 vi.mock("next/server", () => ({ connection: async () => {} }));
 
-const TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"; // RFC 6238 test key
-const ADMIN = { email: "admin@nearpaw.test", password: "correct-horse-battery-staple" };
-
-function totpNow(): string {
-  const key = Buffer.from("12345678901234567890");
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
-  const h = createHmac("sha1", key).update(buf).digest();
-  const o = h[h.length - 1] & 0xf;
-  return String((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000).padStart(6, "0");
-}
+const ADMIN = { email: "admin@nearpaw.test", password: "correct-horse-battery-9" };
+const PASSWORD = "paws4life26";
 
 // Test helper: responses are asserted structurally, so untyped data is intentional.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,8 +15,6 @@ let call: (method: string, path: string, opts?: { token?: string; body?: unknown
 beforeAll(async () => {
   process.env.AUTH_SECRET = "x".repeat(48);
   process.env.ADMIN_EMAIL = ADMIN.email;
-  process.env.ADMIN_PASSWORD = ADMIN.password;
-  process.env.ADMIN_TOTP_SECRET = TOTP_SECRET;
 
   // Route modules are thin; drive the same handlers through the real route files.
   const load = async (p: string) => (await import(/* @vite-ignore */ `@/app/api/v1/${p}/route`)) as Record<string, (req: Request, ctx?: unknown) => Promise<Response>>;
@@ -49,7 +37,6 @@ beforeAll(async () => {
   };
 });
 
-const PASSWORD = "paws4life26";
 const emailOf = (name: string) => `${name}@nearpaw.test`;
 /** Stands in for opening the confirmation link in the inbox. */
 const confirmEmail = async (name: string) => {
@@ -62,6 +49,13 @@ const signIn = async (name: string) => {
   await confirmEmail(name);
   return (await call("POST", "auth/sign-in", { body: { email: emailOf(name), password: PASSWORD } })).json.data.token as string;
 };
+/** The admin has a normal Supabase account; ADMIN_EMAIL gives it the admin role on first sign-in. */
+const adminLogin = async (password = ADMIN.password) => {
+  await call("POST", "auth/register", { body: { email: ADMIN.email, password: ADMIN.password, acceptedTerms: true } });
+  await confirmEmail("admin");
+  return call("POST", "admin/auth/login", { body: { email: ADMIN.email, password } });
+};
+const adminToken = async () => (await adminLogin()).json.data.token as string;
 const report = (over: Record<string, unknown> = {}) => ({
   animal: "cat",
   condition: "injured",
@@ -114,6 +108,16 @@ describe("nearpaw backend", () => {
     expect((await call("POST", "auth/resend-verification", { body: { email: emailOf("nobody.here") } })).status).toBe(200);
   });
 
+  it("only lets accounts with the admin role into the console", async () => {
+    const user = await signIn("budi.santoso");
+    const denied = await call("POST", "admin/auth/login", { body: { email: emailOf("budi.santoso"), password: PASSWORD } });
+    expect(denied.status).toBe(403);
+    expect((await call("GET", "admin/dashboard", { token: user })).status).toBe(403);
+
+    const admin = await adminToken();
+    expect((await call("GET", "admin/dashboard", { token: admin })).status).toBe(200);
+  });
+
   it("rejects weak passwords and a missing terms checkbox, and locks after repeated wrong passwords", async () => {
     const email = emailOf("rina.wijaya");
     const reg = (over: Record<string, unknown>) => call("POST", "auth/register", { body: { email, password: PASSWORD, acceptedTerms: true, ...over } });
@@ -159,8 +163,8 @@ describe("nearpaw backend", () => {
     expect((await call("GET", `me/reports/${ref}`, { token: author })).json.data.moderation.hidden).toBe(true);
 
     // admin console
-    expect((await call("POST", "admin/auth/login", { body: { ...ADMIN, password: "wrong-password-xx", code: totpNow() } })).status).toBe(401);
-    const login = await call("POST", "admin/auth/login", { body: { ...ADMIN, code: totpNow() } });
+    expect((await adminLogin("wrong-password-xx")).status).toBe(401);
+    const login = await adminLogin();
     expect(login.status).toBe(200);
     const admin = login.json.data.token as string;
 
@@ -226,7 +230,7 @@ describe("nearpaw backend", () => {
   });
 
   it("publishes impact only after verification, per currency", async () => {
-    const admin = (await call("POST", "admin/auth/login", { body: { ...ADMIN, code: totpNow() } })).json.data.token as string;
+    const admin = await adminToken();
     const period = (await call("POST", "admin/impact/periods", { token: admin, body: { label: "Q4 2026", summary: "Year end" } })).json.data;
     const alloc = (
       await call("POST", `admin/impact/periods/${period.id}/allocations`, {
@@ -257,7 +261,7 @@ describe("nearpaw backend", () => {
     const priv = await call("POST", "privacy-requests", { body: { type: "deletion", email: "someone@gmail.com", details: "Please delete my data." } });
     expect(priv.json.data.ref).toMatch(/^PRV-/);
 
-    const admin = (await call("POST", "admin/auth/login", { body: { ...ADMIN, code: totpNow() } })).json.data.token as string;
+    const admin = await adminToken();
     const inbox = await call("GET", "admin/support", { token: admin });
     expect(inbox.json.data.items[0].from).toBe("s***@gmail.com");
     const reqs = await call("GET", "admin/privacy-requests", { token: admin });
