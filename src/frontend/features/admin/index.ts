@@ -6,3 +6,4 @@ export { ReportsView } from "./components/reports-view";
 export { ReportReviewView } from "./components/report-review-view";
 export { UpdatesView } from "./components/updates-view";
 export { FlagsView } from "./components/flags-view";
+export { UsersView } from "./components/users-view";
