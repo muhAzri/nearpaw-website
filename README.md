@@ -90,3 +90,38 @@ Frontend hanya bicara ke backend lewat HTTP `/api/v1/*` (`frontend/shared/lib/ap
 
 - Response envelope: `{ "data": ... }` atau `{ "error": { code, message, details } }`.
 - Auth belum dibuat; contoh implementasi ada di Texium (`backend/modules/auth`). `/admin` belum diproteksi.
+
+## Backend API (v1)
+
+Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-satunya tempat modul bertemu lewat port):
+
+| Modul | Isi |
+| --- | --- |
+| `identity` | Sign in with Apple (JWKS), login admin (password + TOTP, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
+| `regions` | Region **opsional** (override expiry/support), feature flag, safety limits, ad placement global atau per region (placement terkunci tidak bisa diaktifkan) |
+| `reports` | Laporan (live langsung, expire otomatis, rate limit, kontak dilarang di teks), update komunitas, flag + auto-hide, review/keep/duplicate/hide/remove, dashboard stats |
+| `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
+| `alerts` | Pengaturan area/radius/hewan, feed, device token, fan-out saat laporan terbit |
+| `support` | Pesan support + privacy request publik (rate limit, honeypot), inbox admin (email dimasking) |
+| `audit` | Log append-only + export CSV |
+| `admin` | Agregat dashboard |
+
+Endpoint publik/app: `/api/v1/{auth/apple,config,regions,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
+Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
+
+Auth: `Authorization: Bearer <token>`. Di development tanpa `APPLE_CLIENT_ID`, token `dev:<subject>` diterima di `/auth/apple`. Env: lihat `.env.example`.
+
+### Belum ada (sengaja)
+
+- **Persistensi**: semua repository masih in-memory di `infrastructure/` (hilang saat restart). Ganti dengan adapter Supabase di balik port `domain/repositories.ts` tanpa mengubah use case.
+- **Upload foto**: API menerima storage key `public/...` (EXIF sudah dibuang oleh pipeline media); pipeline + signed upload belum dibuat.
+- **Push (APNs) dan email**: `PushNotifier` / `Mailer` masih placeholder yang melaporkan "tidak terkirim".
+- **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
+
+### Database (Supabase)
+
+Skema dipecah per modul di `supabase/migrations/*.sql` (urut timestamp, jangan diedit setelah dijalankan; perubahan = file baru; jalankan lewat `supabase db push` atau SQL editor). RLS aktif tanpa policy: hanya server (secret key) yang boleh akses. Adapter Supabase untuk tiap `domain/repositories.ts` **belum ditulis**; saat ini app masih memakai repository in-memory.
+
+### Cakupan global
+
+Pelaporan bisa dilakukan di mana saja; tidak perlu mendaftarkan region/negara. Region hanya override opsional (mis. masa expiry). Untuk membatasi hanya region aktif, nyalakan feature flag `restrictToRegions` (default mati). Expiry default: `safetyLimits.reportExpiryDays` (7).
