@@ -2,3 +2,5 @@
 export { AdminShell, AdminLoading } from "./components/admin-shell";
 export { LoginView } from "./components/login-view";
 export { DashboardView } from "./components/dashboard-view";
+export { ReportsView } from "./components/reports-view";
+export { ReportReviewView } from "./components/report-review-view";
