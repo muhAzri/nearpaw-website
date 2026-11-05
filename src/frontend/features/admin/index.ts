@@ -4,3 +4,5 @@ export { LoginView } from "./components/login-view";
 export { DashboardView } from "./components/dashboard-view";
 export { ReportsView } from "./components/reports-view";
 export { ReportReviewView } from "./components/report-review-view";
+export { UpdatesView } from "./components/updates-view";
+export { FlagsView } from "./components/flags-view";
