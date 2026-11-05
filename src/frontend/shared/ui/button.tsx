@@ -2,19 +2,19 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 
 const VARIANTS = {
-  primary: "bg-accent text-on-accent hover:bg-accent-hover",
-  outline: "border-border-strong text-ink hover:bg-surface-raised",
-  ghost: "text-ink-muted hover:bg-surface-raised hover:text-ink",
-  danger: "bg-danger text-on-danger hover:opacity-88",
+  /** The one main action on a screen: ink. */
+  primary: "border-transparent bg-ink text-white hover:bg-ink/90",
+  soft: "border-transparent bg-muted text-ink hover:bg-ink-wash",
+  outline: "border-border bg-surface text-ink hover:bg-muted",
+  /** Teal fill with an ink label. Never teal text. */
+  brand: "border-transparent bg-brand text-ink hover:brightness-95",
+  danger: "border-danger bg-surface text-danger-ink hover:bg-danger-wash",
 } as const;
 
 const SIZES = {
-  sm: "h-8 px-4 text-[13px]",
-  md: "h-10 px-5 text-sm",
-  lg: "h-11 px-6 text-[15px]",
-  /** Icon-only: pass an `aria-label`. */
-  icon: "size-10 px-0",
-  "icon-sm": "size-8 px-0",
+  sm: "h-10 px-4 text-p2",
+  md: "h-11 px-5 text-p1",
+  lg: "h-[52px] px-7 text-p1",
 } as const;
 
 type ButtonStyle = {
@@ -23,8 +23,8 @@ type ButtonStyle = {
   block?: boolean;
 };
 
-function buttonClass({ variant = "primary", size = "md", block = false }: ButtonStyle, className: string) {
-  return `inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border border-transparent font-semibold leading-5 disabled:cursor-not-allowed disabled:opacity-45 ${VARIANTS[variant]} ${SIZES[size]} ${block ? "w-full" : ""} ${className}`;
+export function buttonClass({ variant = "primary", size = "lg", block = false }: ButtonStyle = {}, className = "") {
+  return `inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border font-bold no-underline disabled:cursor-not-allowed disabled:opacity-45 ${VARIANTS[variant]} ${SIZES[size]} ${block ? "w-full" : ""} ${className}`;
 }
 
 /** Pill button. One `primary` action per screen or dialog. */
@@ -33,9 +33,10 @@ export function Button({
   size,
   block,
   className = "",
+  type = "button",
   ...props
 }: ComponentProps<"button"> & ButtonStyle) {
-  return <button className={buttonClass({ variant, size, block }, className)} {...props} />;
+  return <button type={type} className={buttonClass({ variant, size, block }, className)} {...props} />;
 }
 
 /** A link that looks like a `Button`. */
