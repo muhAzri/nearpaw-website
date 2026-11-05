@@ -1,14 +1,16 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import { serverEnv } from "@/backend/shared/config/env";
+import { sharedRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
 import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
-import { AdminLogin, SignInWithApple } from "./application/auth.usecases";
+import { AdminLogin, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
 import type { AccountDataCleaner, UserActivityReader } from "./application/ports";
-import { AppleJwksVerifier, DevIdentityVerifier } from "./infrastructure/apple-identity.verifier";
+import { DevAuthProvider } from "./infrastructure/dev-auth.provider";
 import { EnvAdminDirectory, InMemoryLoginAttempts } from "./infrastructure/env-admin.directory";
 import { HmacTokenService } from "./infrastructure/hmac-token.service";
+import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
 import { IdentityController } from "./presentation/identity.controller";
 
@@ -26,11 +28,14 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   const tokens = singleton("token_service", () =>
     env.AUTH_SECRET ? new HmacTokenService(env.AUTH_SECRET) : HmacTokenService.withEphemeralSecret(),
   );
-  const apple = env.APPLE_CLIENT_ID
-    ? new AppleJwksVerifier(env.APPLE_CLIENT_ID)
-    : env.NODE_ENV === "production"
-      ? { verify: async () => Promise.reject(new Error("APPLE_CLIENT_ID is not configured")) }
-      : new DevIdentityVerifier();
+  // Supabase Auth when configured; an in-memory stand-in outside production so local work needs no project.
+  const credentials =
+    env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      ? new SupabaseAuthProvider(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
+      : env.NODE_ENV === "production"
+        ? new UnconfiguredAuthProvider()
+        : singleton("dev_auth", () => new DevAuthProvider(env.NODE_ENV !== "test"));
+  const limiter = sharedRateLimiter();
   const admins = new EnvAdminDirectory({
     email: env.ADMIN_EMAIL,
     password: env.ADMIN_PASSWORD,
@@ -56,7 +61,10 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   function build(late: { cleaner: AccountDataCleaner; activity: UserActivityReader }) {
     return new IdentityController(
       authenticator,
-      new SignInWithApple(users, apple, tokens, clock),
+      new Register(credentials, limiter),
+      new SignInWithPassword(users, credentials, attempts, tokens, clock),
+      new RequestPasswordReset(credentials, limiter),
+      new ResendVerification(credentials, limiter),
       new AdminLogin(admins, attempts, tokens, deps.audit, clock),
       new AccountService(users, blocks, late.cleaner, clock),
       new UserAdmin(users, blocks, late.activity, deps.audit),

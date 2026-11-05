@@ -49,7 +49,19 @@ beforeAll(async () => {
   };
 });
 
-const signIn = async (sub: string) => (await call("POST", "auth/apple", { body: { identityToken: `dev:${sub}` } })).json.data.token as string;
+const PASSWORD = "paws4life26";
+const emailOf = (name: string) => `${name}@nearpaw.test`;
+/** Stands in for opening the confirmation link in the inbox. */
+const confirmEmail = async (name: string) => {
+  const { singleton } = await import("@/backend/shared/infrastructure/singleton");
+  singleton<{ confirm(email: string): void }>("dev_auth", () => { throw new Error("auth provider not created yet"); }).confirm(emailOf(name));
+};
+/** Register, confirm the email and sign in, the way a person does in the app. */
+const signIn = async (name: string) => {
+  expect((await call("POST", "auth/register", { body: { email: emailOf(name), password: PASSWORD, acceptedTerms: true } })).status).toBe(201);
+  await confirmEmail(name);
+  return (await call("POST", "auth/sign-in", { body: { email: emailOf(name), password: PASSWORD } })).json.data.token as string;
+};
 const report = (over: Record<string, unknown> = {}) => ({
   animal: "cat",
   condition: "injured",
@@ -66,6 +78,55 @@ describe("nearpaw backend", () => {
     const cfg = await call("GET", "config");
     expect(cfg.status).toBe(200);
     expect(cfg.json.data.regions).toEqual([]); // no regions needed
+  });
+
+  it("registers, requires a confirmed email, signs in and recovers a password", async () => {
+    const body = { email: emailOf("maya.putri"), password: PASSWORD, acceptedTerms: true };
+    const reg = await call("POST", "auth/register", { body });
+    expect(reg.status).toBe(201);
+    expect(reg.json.data).toEqual({ status: "verification_required", email: "m***@nearpaw.test" });
+
+    // the same address can't register twice
+    const dup = await call("POST", "auth/register", { body });
+    expect(dup.status).toBe(409);
+    expect(dup.json.error?.message).toBe("This email is already registered. Sign in instead.");
+
+    // signing in before the link is opened points the app at the verify screen
+    const early = await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } });
+    expect(early.status).toBe(403);
+    expect(early.json.error?.code).toBe("EMAIL_NOT_VERIFIED");
+
+    await confirmEmail("maya.putri");
+    const wrong = await call("POST", "auth/sign-in", { body: { email: body.email, password: "wrong-pass-1" } });
+    expect(wrong.status).toBe(401);
+    expect(wrong.json.error?.message).toBe("Wrong email or password. Try again.");
+
+    const session = await call("POST", "auth/sign-in", { body: { email: body.email.toUpperCase(), password: PASSWORD } });
+    expect(session.status).toBe(200);
+    expect(session.json.data.user).toMatchObject({ signInMethod: "email", email: body.email, status: "active" });
+    expect((await call("GET", "me", { token: session.json.data.token })).json.data.email).toBe(body.email);
+
+    // recovery never reveals whether the account exists
+    const known = await call("POST", "auth/forgot-password", { body: { email: body.email } });
+    const unknown = await call("POST", "auth/forgot-password", { body: { email: emailOf("nobody.here") } });
+    expect([known.status, unknown.status]).toEqual([200, 200]);
+    expect(known.json).toEqual(unknown.json);
+    expect((await call("POST", "auth/resend-verification", { body: { email: emailOf("nobody.here") } })).status).toBe(200);
+  });
+
+  it("rejects weak passwords and a missing terms checkbox, and locks after repeated wrong passwords", async () => {
+    const email = emailOf("rina.wijaya");
+    const reg = (over: Record<string, unknown>) => call("POST", "auth/register", { body: { email, password: PASSWORD, acceptedTerms: true, ...over } });
+    expect((await reg({ password: "short1" })).status).toBe(422);
+    expect((await reg({ password: "onlyletters" })).status).toBe(422);
+    expect((await reg({ password: "password123" })).status).toBe(422);
+    expect((await reg({ acceptedTerms: false })).status).toBe(422);
+
+    await signIn("rina.wijaya");
+    for (let i = 0; i < 5; i++) {
+      expect((await call("POST", "auth/sign-in", { body: { email, password: "nope-nope-9" } })).status).toBe(401);
+    }
+    expect((await call("POST", "auth/sign-in", { body: { email, password: PASSWORD } })).status).toBe(429);
   });
 
   it("requires sign-in, works worldwide and rejects contact info", async () => {

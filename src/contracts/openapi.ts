@@ -17,7 +17,10 @@ interface Op {
 
 const ops: Op[] = [
   // ---- App: auth & account ----
-  { method: "post", path: "/auth/apple", tag: "Auth", summary: "Sign in with Apple (dev: `dev:<subject>` tokens outside production)", body: C.AppleSignInSchema },
+  { method: "post", path: "/auth/register", tag: "Auth", summary: "Create an account with email + password; Supabase emails a confirmation link", body: C.RegisterSchema, status: 201 },
+  { method: "post", path: "/auth/sign-in", tag: "Auth", summary: "Sign in with email + password (403 EMAIL_NOT_VERIFIED until the link is opened)", body: C.SignInSchema },
+  { method: "post", path: "/auth/forgot-password", tag: "Auth", summary: "Email a password reset link (same response whether or not the account exists)", body: C.EmailOnlySchema },
+  { method: "post", path: "/auth/resend-verification", tag: "Auth", summary: "Resend the confirmation email", body: C.EmailOnlySchema },
   { method: "get", path: "/me", tag: "Account", summary: "Current profile", auth: "user" },
   { method: "patch", path: "/me", tag: "Account", summary: "Change display name", auth: "user", body: C.UpdateProfileSchema },
   { method: "delete", path: "/me", tag: "Account", summary: "Delete account (keep reports anonymously or delete them)", auth: "user", body: C.DeleteAccountSchema, status: 204 },
@@ -151,7 +154,7 @@ export function buildOpenApi(serverUrl = "") {
       version: "1.0.0",
       description:
         "Success: `{ \"data\": … }`. Errors: `{ \"error\": { code, message, details } }`. " +
-        "App tokens come from `/auth/apple`; admin tokens from `/admin/auth/login` (MFA).",
+        "App tokens come from `/auth/sign-in`; admin tokens from `/admin/auth/login` (MFA).",
     },
     servers: [{ url: `${serverUrl}/api/v1` }],
     tags: [...new Set(ops.map((o) => o.tag))].map((name) => ({ name })),

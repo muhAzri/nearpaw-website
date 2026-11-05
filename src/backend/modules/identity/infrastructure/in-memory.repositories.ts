@@ -12,9 +12,6 @@ export class InMemoryUserRepository implements UserRepository {
   async findById(id: string) {
     return this.users.get(id) ?? null;
   }
-  async findByAppleSub(sub: string) {
-    return [...this.users.values()].find((u) => u.appleSub === sub) ?? null;
-  }
   async findByPublicNumber(n: number) {
     return [...this.users.values()].find((u) => u.publicNumber === n) ?? null;
   }

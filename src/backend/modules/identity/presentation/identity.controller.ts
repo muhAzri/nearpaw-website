@@ -1,28 +1,43 @@
 import {
   AdminLoginSchema,
   AdminUsersQuerySchema,
-  AppleSignInSchema,
   DeleteAccountSchema,
+  EmailOnlySchema,
+  RegisterSchema,
+  SignInSchema,
   UpdateProfileSchema,
   UserActionSchema,
 } from "@/contracts";
 import { NotFoundError, ValidationError } from "@/backend/shared/domain/errors";
 import { requireAdmin, requireUser, type Authenticator } from "@/backend/shared/presentation/auth";
-import { noContent, ok, parseJson, parseQuery } from "@/backend/shared/presentation/http";
+import { created, noContent, ok, parseJson, parseQuery } from "@/backend/shared/presentation/http";
 import type { AccountService, UserAdmin } from "../application/account.usecases";
-import type { AdminLogin, SignInWithApple } from "../application/auth.usecases";
+import type { AdminLogin, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "../application/auth.usecases";
 
 export class IdentityController {
   constructor(
     private readonly auth: Authenticator,
-    private readonly signInWithApple: SignInWithApple,
+    private readonly registerUser: Register,
+    private readonly signInUser: SignInWithPassword,
+    private readonly passwordReset: RequestPasswordReset,
+    private readonly resendVerification: ResendVerification,
     private readonly adminLogin: AdminLogin,
     private readonly account: AccountService,
     private readonly userAdmin: UserAdmin,
   ) {}
 
-  appleSignIn = async (request: Request) =>
-    ok(await this.signInWithApple.execute(await parseJson(request, AppleSignInSchema)));
+  register = async (request: Request) => {
+    const { email, password } = await parseJson(request, RegisterSchema);
+    return created(await this.registerUser.execute({ email, password }));
+  };
+
+  signIn = async (request: Request) => ok(await this.signInUser.execute(await parseJson(request, SignInSchema)));
+
+  forgotPassword = async (request: Request) =>
+    ok(await this.passwordReset.execute(await parseJson(request, EmailOnlySchema)));
+
+  resendVerificationEmail = async (request: Request) =>
+    ok(await this.resendVerification.execute(await parseJson(request, EmailOnlySchema)));
 
   adminSignIn = async (request: Request) =>
     ok(await this.adminLogin.execute(await parseJson(request, AdminLoginSchema)));

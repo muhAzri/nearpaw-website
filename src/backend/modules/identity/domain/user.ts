@@ -7,7 +7,6 @@ export interface User {
   readonly id: string;
   /** Pseudonymous number shown as "Community member #4821". */
   readonly publicNumber: number;
-  readonly appleSub: string | null;
   readonly displayName: string;
   readonly email: string | null;
   readonly status: UserStatus;
@@ -43,7 +42,6 @@ export function applyAction(user: User, action: UserAction): User {
 export function anonymize(user: User, now: Date): User {
   return {
     ...user,
-    appleSub: null,
     email: null,
     displayName: "Deleted user",
     status: "deleted",

@@ -1,11 +1,25 @@
 import { z } from "zod";
 
-export const AppleSignInSchema = z.object({
-  identityToken: z.string().min(1),
-  /** Apple only sends the name on the very first sign-in. */
-  displayName: z.string().trim().min(2).max(40).optional(),
+const EmailSchema = z.email().max(254);
+
+/** Create account (S03b). The checkbox covers Terms, Privacy Policy and the minimum age. */
+export const RegisterSchema = z.object({
+  email: EmailSchema,
+  password: z.string().min(8, "Use at least 8 characters").max(72),
+  acceptedTerms: z.literal(true, { error: "Accept the Terms and Privacy Policy to continue" }),
 });
-export type AppleSignInInput = z.infer<typeof AppleSignInSchema>;
+export type RegisterInput = z.infer<typeof RegisterSchema>;
+
+/** Sign in (S03). */
+export const SignInSchema = z.object({
+  email: EmailSchema,
+  password: z.string().min(1).max(72),
+});
+export type SignInInput = z.infer<typeof SignInSchema>;
+
+/** Forgot password (S03c) and resend confirmation email (S03d). */
+export const EmailOnlySchema = z.object({ email: EmailSchema });
+export type EmailOnlyInput = z.infer<typeof EmailOnlySchema>;
 
 export const AdminLoginSchema = z.object({
   email: z.email(),

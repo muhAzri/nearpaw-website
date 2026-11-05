@@ -11,7 +11,6 @@ export interface UserSearch {
 export interface UserRepository {
   nextPublicNumber(): Promise<number>;
   findById(id: string): Promise<User | null>;
-  findByAppleSub(sub: string): Promise<User | null>;
   findByPublicNumber(n: number): Promise<User | null>;
   save(user: User): Promise<void>;
   search(criteria: UserSearch): Promise<Page<User>>;

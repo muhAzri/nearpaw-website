@@ -1,12 +1,16 @@
 import "server-only";
 import { z } from "zod";
 
+/** `.env` files declare unset keys as `KEY=`, which arrives as an empty string. */
+const blankAsUndefined = <T extends z.ZodType>(schema: T) => z.preprocess((v) => (v === "" ? undefined : v), schema);
+
 const ServerEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /** HMAC secret for session tokens (>= 32 chars). Required in production. */
   AUTH_SECRET: z.string().min(32).optional(),
-  /** Sign in with Apple: the app's bundle id / Services id (the `aud` of identity tokens). */
-  APPLE_CLIENT_ID: z.string().min(1).optional(),
+  /** Supabase Auth (email + password). Both unset outside production = in-memory dev accounts. */
+  NEXT_PUBLIC_SUPABASE_URL: blankAsUndefined(z.url().optional()),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: blankAsUndefined(z.string().min(1).optional()),
   /** Bootstrap admin. Admin login is disabled until all three are set. */
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(12).optional(),
