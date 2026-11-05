@@ -97,7 +97,7 @@ Frontend hanya bicara ke backend lewat HTTP `/api/v1/*` (`frontend/shared/lib/ap
 ## Catatan
 
 - Response envelope: `{ "data": ... }` atau `{ "error": { code, message, details } }`.
-- Admin: login lewat `/admin/login` (email + password + kode TOTP). Token Bearer disimpan di `sessionStorage` (kedaluwarsa 8 jam); layar `/admin/*` mengarahkan ke login bila sesi tidak ada atau 401. Belum ada cookie/BFF.
+- Admin: login lewat `/admin/login` (email + password akun Supabase dengan role admin, tanpa MFA). Token Bearer disimpan di `sessionStorage` (kedaluwarsa 8 jam); layar `/admin/*` mengarahkan ke login bila sesi tidak ada atau 401. Belum ada cookie/BFF.
 - Frontend publik mengambil data dari `/api/v1/*` di dalam `<Suspense>` (Cache Components); halaman statis tidak memanggil backend saat build.
 - Token desain (warna, font, radius) ada di `src/app/globals.css`; komponen dasar di `src/frontend/shared/ui`.
 - Teks legal bertanda `[...]` di `features/content/lib/legal-copy.ts` masih placeholder.
@@ -108,7 +108,7 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 
 | Modul | Isi |
 | --- | --- |
-| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (password + TOTP, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
+| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (akun Supabase yang sama + `users.role = 'admin'`, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
 | `regions` | Region **opsional** (override expiry/support), feature flag, safety limits, ad placement global atau per region (placement terkunci tidak bisa diaktifkan) |
 | `reports` | Laporan (live langsung, expire otomatis, rate limit, kontak dilarang di teks), update komunitas, flag + auto-hide, review/keep/duplicate/hide/remove, dashboard stats |
 | `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
