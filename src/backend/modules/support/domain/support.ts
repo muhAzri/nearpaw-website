@@ -41,12 +41,6 @@ export interface PrivacyRequest {
 
 export const PRIVACY_RESPONSE_DAYS = 30;
 
-/** a***@gmail.com — enough to recognise, not enough to contact. */
-export function maskEmail(email: string): string {
-  const [local, domain = ""] = email.split("@");
-  return `${local.slice(0, 1)}***@${domain}`;
-}
-
 export function assertCanComplete(request: PrivacyRequest): void {
   if (!request.emailMatchesAccount) {
     throw new ValidationError("Verify that the email matches the account before completing the request");

@@ -1,6 +1,7 @@
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import type { Clock } from "@/backend/shared/application/clock";
 import { DAY_MS } from "@/backend/shared/application/clock";
+import { maskEmail } from "@/backend/shared/domain/email";
 import { ConflictError, NotFoundError, RateLimitedError } from "@/backend/shared/domain/errors";
 import { actorOf, type Principal } from "@/backend/shared/domain/principal";
 import { generateReference } from "@/backend/shared/domain/reference";
@@ -8,7 +9,6 @@ import type { RateLimiter } from "@/backend/shared/application/rate-limiter";
 import type { SupportRepository } from "../domain/repositories";
 import {
   assertCanComplete,
-  maskEmail,
   PRIVACY_RESPONSE_DAYS,
   type PrivacyRequest,
   type PrivacyStatus,

@@ -2,6 +2,12 @@ import { ValidationError } from "./errors";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** a***@gmail.com: enough to recognise, not enough to contact. */
+export function maskEmail(email: string): string {
+  const [local, domain = ""] = email.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
 /** Value object: always normalized and valid once constructed. */
 export class Email {
   private constructor(readonly value: string) {}
