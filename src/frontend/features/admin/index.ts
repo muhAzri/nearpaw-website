@@ -8,3 +8,5 @@ export { UpdatesView } from "./components/updates-view";
 export { FlagsView } from "./components/flags-view";
 export { UsersView } from "./components/users-view";
 export { ImpactAdminView } from "./components/impact-admin-view";
+export { RegionsView } from "./components/regions-view";
+export { AdsView } from "./components/ads-view";
