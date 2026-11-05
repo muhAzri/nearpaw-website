@@ -1,5 +1,5 @@
-import type { z } from "zod";
-import { API_PREFIX, ApiErrorBodySchema } from "@/contracts";
+import { z } from "zod";
+import { API_PREFIX, ApiErrorBodySchema, apiSuccess } from "@/contracts";
 
 /**
  * The frontend talks to the backend ONLY over HTTP using the shared contracts.
@@ -53,4 +53,19 @@ export async function apiRequest<S extends z.ZodType>(
   }
 
   return schema.parse(json);
+}
+
+/** Calls an endpoint that answers `{ data }` and returns just the data. */
+export async function apiData<S extends z.ZodType>(
+  path: string,
+  schema: S,
+  init?: Parameters<typeof apiRequest>[2],
+): Promise<z.infer<S>> {
+  const body = await apiRequest(path, apiSuccess(schema), init);
+  return (body as { data: z.infer<S> }).data;
+}
+
+/** Calls an endpoint that answers 204 (no body). */
+export async function apiVoid(path: string, init?: Parameters<typeof apiRequest>[2]): Promise<void> {
+  await apiRequest(path, z.null(), init);
 }
