@@ -28,7 +28,7 @@ export const PRIVACY: LegalCopy = {
   sections: [
     {
       title: "What we collect",
-      body: `Account details from Sign in with Apple, the reports and photos you post, the exact location you pin on a report, your device and notification token, and usage data. ${TBC}`,
+      body: `Your account email address, the reports and photos you post, the exact location you pin on a report, your device and notification token, and usage data. ${TBC}`,
     },
     {
       title: "Exact locations are public",
@@ -61,7 +61,7 @@ export const TERMS: LegalCopy = {
   questions: true,
   sections: [
     { title: "Who can use Nearpaw", body: "[Minimum age and eligibility.]" },
-    { title: "Your account", body: "Sign in with Apple. Keep your account secure." },
+    { title: "Your account", body: "Sign in with your email and a password. Keep your account secure." },
     {
       title: "Your content",
       body: "You keep ownership of what you post and give us a licence to show it. Reports already live may continue anonymously if you delete your account.",

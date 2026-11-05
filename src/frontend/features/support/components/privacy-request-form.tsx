@@ -89,7 +89,7 @@ export function PrivacyRequestForm() {
         <Input id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" aria-invalid={!!errors.email} />
       </Field>
       <Field label="Account identifier (optional)" htmlFor="accountIdentifier" error={errors.accountIdentifier}>
-        <Input id="accountIdentifier" name="accountIdentifier" placeholder="Apple relay email or report reference" />
+        <Input id="accountIdentifier" name="accountIdentifier" placeholder="Account email or report reference" />
       </Field>
       <Field label="Details" htmlFor="details" error={errors.details}>
         <Textarea id="details" name="details" rows={4} placeholder="Tell us what you need." aria-invalid={!!errors.details} />

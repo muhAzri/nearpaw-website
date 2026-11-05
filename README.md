@@ -108,7 +108,7 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 
 | Modul | Isi |
 | --- | --- |
-| `identity` | Sign in with Apple (JWKS), login admin (password + TOTP, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
+| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (password + TOTP, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
 | `regions` | Region **opsional** (override expiry/support), feature flag, safety limits, ad placement global atau per region (placement terkunci tidak bisa diaktifkan) |
 | `reports` | Laporan (live langsung, expire otomatis, rate limit, kontak dilarang di teks), update komunitas, flag + auto-hide, review/keep/duplicate/hide/remove, dashboard stats |
 | `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
@@ -117,10 +117,10 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 | `audit` | Log append-only + export CSV |
 | `admin` | Agregat dashboard |
 
-Endpoint publik/app: `/api/v1/{auth/apple,config,regions,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
+Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
 Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
 
-Auth: `Authorization: Bearer <token>`. Di development tanpa `APPLE_CLIENT_ID`, token `dev:<subject>` diterima di `/auth/apple`. Env: lihat `.env.example`.
+Auth: `Authorization: Bearer <token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Tanpa keduanya di development, akun disimpan in-memory dan langsung terkonfirmasi. Token app tetap diterbitkan backend ini. Env: lihat `.env.example`.
 
 ### Belum ada (sengaja)
 
