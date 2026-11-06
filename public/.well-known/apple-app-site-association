@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["68R77L7WB2.com.lambdainteractive.NearPaw"],
+        "components": [
+          { "/": "/r/*", "comment": "Shared report links" }
+        ]
+      }
+    ]
+  }
+}
