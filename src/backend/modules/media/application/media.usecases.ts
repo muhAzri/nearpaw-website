@@ -4,9 +4,11 @@ import type { RateLimiter } from "@/backend/shared/application/rate-limiter";
 import { RateLimitedError, ValidationError } from "@/backend/shared/domain/errors";
 import {
   MAX_FILES_PER_REQUEST,
+  MAX_THUMBNAIL_BYTES,
   MAX_UPLOAD_BYTES,
   MEDIA_CONTENT_TYPE,
   mediaKey,
+  thumbnailKey,
   type MediaPurpose,
 } from "@/backend/shared/domain/media-key";
 import type { Principal } from "@/backend/shared/domain/principal";
@@ -36,7 +38,7 @@ export const UPLOAD_REQUESTS_PER_HOUR = 20;
 
 export interface UploadRequest {
   purpose: MediaPurpose;
-  files: { contentType: string; sizeBytes: number }[];
+  files: { contentType: string; sizeBytes: number; thumbnailSizeBytes?: number }[];
 }
 
 export class MediaUploads {
@@ -58,6 +60,12 @@ export class MediaUploads {
         throw new ValidationError(`Each photo must be under ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`, { field: "sizeBytes" });
       }
     }
+    for (const file of request.files) {
+      const t = file.thumbnailSizeBytes;
+      if (t !== undefined && (!Number.isInteger(t) || t < 1 || t > MAX_THUMBNAIL_BYTES)) {
+        throw new ValidationError(`Each thumbnail must be under ${Math.floor(MAX_THUMBNAIL_BYTES / 1024)} KB`, { field: "thumbnailSizeBytes" });
+      }
+    }
     await this.policy.assertCanUpload(user.id);
     if (!this.limiter.allow(`upload:${user.id}`, UPLOAD_REQUESTS_PER_HOUR, HOUR_MS)) {
       throw new RateLimitedError("You've reached the hourly photo upload limit. Please try again later.");
@@ -73,7 +81,15 @@ export class MediaUploads {
           contentLength: file.sizeBytes,
           expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
         });
-        return { key, uploadUrl: signed.url, method: signed.method, headers: signed.headers, expiresAt };
+        const upload = { key, uploadUrl: signed.url, method: signed.method, headers: signed.headers, expiresAt };
+        if (file.thumbnailSizeBytes === undefined) return upload;
+        const thumb = await this.storage.presignUpload({
+          key: thumbnailKey(key),
+          contentType: file.contentType,
+          contentLength: file.thumbnailSizeBytes,
+          expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
+        });
+        return { ...upload, thumbnail: { key: thumbnailKey(key), uploadUrl: thumb.url, method: thumb.method, headers: thumb.headers, expiresAt } };
       }),
     );
     return { uploads };

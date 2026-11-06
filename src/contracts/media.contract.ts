@@ -4,6 +4,7 @@ import { z } from "zod";
 export const MEDIA_CONTENT_TYPE = "image/webp";
 export const MEDIA_MAX_BYTES = 2 * 1024 * 1024;
 export const MEDIA_MAX_FILES = 4;
+export const MEDIA_MAX_THUMBNAIL_BYTES = 256 * 1024;
 
 /**
  * Ask for presigned upload URLs (one per photo). The app compresses each photo to WebP first, so it knows the
@@ -16,6 +17,8 @@ export const CreateUploadUrlsSchema = z.object({
       z.object({
         contentType: z.literal(MEDIA_CONTENT_TYPE),
         sizeBytes: z.number().int().min(1).max(MEDIA_MAX_BYTES),
+        /** Optional small variant (WebP) for lists; sign a second URL for it. */
+        thumbnailSizeBytes: z.number().int().min(1).max(MEDIA_MAX_THUMBNAIL_BYTES).optional(),
       }),
     )
     .min(1)

@@ -12,6 +12,8 @@ export const MEDIA_EXTENSION = "webp";
 /** Photos are compressed on the phone, so a few hundred KB is typical; this is a hard ceiling. */
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 export const MAX_FILES_PER_REQUEST = 4;
+/** Each photo also gets a small list thumbnail (~400 px). Typical size is 15-40 KB; this is the ceiling. */
+export const MAX_THUMBNAIL_BYTES = 256 * 1024;
 
 const SAFE_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -20,7 +22,19 @@ export function mediaKey(userId: string, purpose: MediaPurpose, fileId: string):
   return `public/${purpose}/${userId}/${fileId}.${MEDIA_EXTENSION}`;
 }
 
+const THUMBNAIL_SUFFIX = "_t";
+
+/** `public/report/<user>/<id>.webp` -> `public/report/<user>/<id>_t.webp`. Pure naming convention, so no extra column. */
+export function thumbnailKey(key: string): string {
+  return key.replace(new RegExp(`\\.${MEDIA_EXTENSION}$`), `${THUMBNAIL_SUFFIX}.${MEDIA_EXTENSION}`);
+}
+
+export function isThumbnailKey(key: string): boolean {
+  return key.endsWith(`${THUMBNAIL_SUFFIX}.${MEDIA_EXTENSION}`);
+}
+
 export function isOwnedMediaKey(userId: string, key: string): boolean {
+  if (isThumbnailKey(key)) return false; // thumbnails are derived, never attached directly
   const parts = key.split("/");
   return (
     parts.length === 4 &&
