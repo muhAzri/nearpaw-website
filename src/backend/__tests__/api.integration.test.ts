@@ -90,6 +90,22 @@ describe("nearpaw backend", () => {
     expect(mine.status).toBe(201);
   });
 
+  it("serves the small thumbnail in lists and the full photo in detail", async () => {
+    const token = await signIn("sari.utami77");
+    const me = (await call("GET", "me", { token })).json.data.id as string;
+    const full = `public/report/${me}/abc123.webp`;
+    const created = await call("POST", "reports", { token, body: report({ photos: [full] }) });
+    expect(created.status).toBe(201);
+    const ref = created.json.data.ref as string;
+    const list = await call("GET", "reports", { query: "?lat=-6.2615&lng=106.8106" });
+    const row = (list.json.data.items as { ref: string; thumbnail: string }[]).find((r) => r.ref === ref);
+    expect(row?.thumbnail).toBe(`public/report/${me}/abc123_t.webp`);
+    expect((await call("GET", `reports/${ref}`)).json.data.photos).toEqual([full]);
+    // asking for upload URLs with a thumbnail is part of the public contract
+    const bad = await call("POST", "media/uploads", { token, body: { purpose: "report", files: [{ contentType: "image/webp", sizeBytes: 1000, thumbnailSizeBytes: 999_999 }] } });
+    expect(bad.status).toBe(422);
+  });
+
   it("exposes the media base URL in the launch config", async () => {
     // trailing slash is trimmed so the app can append keys safely
     expect((await call("GET", "config")).json.data.mediaBaseUrl).toBe("https://files.example.test");

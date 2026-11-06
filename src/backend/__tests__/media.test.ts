@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MEDIA_CONTENT_TYPE, MEDIA_MAX_BYTES, MEDIA_MAX_FILES } from "@/contracts";
+import { MEDIA_CONTENT_TYPE, MEDIA_MAX_BYTES, MEDIA_MAX_FILES, MEDIA_MAX_THUMBNAIL_BYTES } from "@/contracts";
 import { MediaUploads, UPLOAD_REQUESTS_PER_HOUR, type ObjectStorage } from "../modules/media/application/media.usecases";
 import { S3ObjectStorage } from "../modules/media/infrastructure/s3-object-storage";
 import { InMemoryRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
 import { ForbiddenError, RateLimitedError, ServiceUnavailableError, ValidationError } from "@/backend/shared/domain/errors";
-import { MAX_FILES_PER_REQUEST, MAX_UPLOAD_BYTES, isOwnedMediaKey, mediaKey } from "@/backend/shared/domain/media-key";
+import { MAX_FILES_PER_REQUEST, MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, isOwnedMediaKey, isThumbnailKey, mediaKey, thumbnailKey } from "@/backend/shared/domain/media-key";
 
 const user = { id: "u_maya42", role: "user" as const };
 const now = new Date("2026-11-06T10:00:00Z");
@@ -51,12 +51,20 @@ describe("media keys", () => {
     ]) expect(isOwnedMediaKey("u_maya42", key), key).toBe(false);
   });
 
+  it("derives the thumbnail key from the photo key and never accepts it as a photo", () => {
+    const key = "public/report/u_maya42/abc123.webp";
+    expect(thumbnailKey(key)).toBe("public/report/u_maya42/abc123_t.webp");
+    expect(isThumbnailKey(thumbnailKey(key))).toBe(true);
+    expect(isThumbnailKey(key)).toBe(false);
+    expect(isOwnedMediaKey("u_maya42", thumbnailKey(key))).toBe(false);
+  });
+
   it("rejects unsafe owner ids when minting keys", () => {
     expect(() => mediaKey("../evil", "report", "a")).toThrow(ValidationError);
   });
 
   it("keeps the shared contract limits in sync with the domain", () => {
-    expect([MEDIA_MAX_BYTES, MEDIA_MAX_FILES]).toEqual([MAX_UPLOAD_BYTES, MAX_FILES_PER_REQUEST]);
+    expect([MEDIA_MAX_BYTES, MEDIA_MAX_FILES, MEDIA_MAX_THUMBNAIL_BYTES]).toEqual([MAX_UPLOAD_BYTES, MAX_FILES_PER_REQUEST, MAX_THUMBNAIL_BYTES]);
   });
 });
 
@@ -68,6 +76,22 @@ describe("MediaUploads", () => {
     expect(uploads[0]).toMatchObject({ method: "PUT", expiresAt: "2026-11-06T10:05:00.000Z" });
     // the signed size is the size the app declared
     expect(storage.calls[1]).toMatchObject({ contentLength: 200_000, contentType: "image/webp", expiresInSeconds: 300 });
+  });
+
+  it("signs a second URL for the thumbnail, sized as declared", async () => {
+    const storage = fakeStorage();
+    const { uploads } = await build({ storage }).createUploadUrls(user, { purpose: "report", files: [{ ...webp(150_000), thumbnailSizeBytes: 20_000 }, webp()] });
+    expect(uploads[0].thumbnail).toMatchObject({ key: "public/report/u_maya42/id1_t.webp", method: "PUT" });
+    expect(uploads[1]).not.toHaveProperty("thumbnail");
+    expect(storage.calls).toHaveLength(3); // photo + thumbnail, then the second photo
+    // files are presigned concurrently, so look the call up by key rather than by position
+    expect((storage.calls as { key: string }[]).find((c) => c.key === "public/report/u_maya42/id1_t.webp")).toMatchObject({ contentLength: 20_000, contentType: "image/webp", expiresInSeconds: 300 });
+  });
+
+  it("rejects an oversized thumbnail before signing anything", async () => {
+    const storage = fakeStorage();
+    await expect(build({ storage }).createUploadUrls(user, { purpose: "report", files: [{ ...webp(), thumbnailSizeBytes: MAX_THUMBNAIL_BYTES + 1 }] })).rejects.toThrow(ValidationError);
+    expect(storage.calls).toHaveLength(0);
   });
 
   it("only accepts WebP within the size and count limits", async () => {
