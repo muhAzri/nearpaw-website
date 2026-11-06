@@ -47,6 +47,8 @@ const ops: Op[] = [
   { method: "put", path: "/me/alerts/settings", tag: "Alerts", summary: "Save alert settings", auth: "user", body: C.AlertSettingsSchema },
   { method: "post", path: "/me/devices", tag: "Alerts", summary: "Register push device token", auth: "user", body: C.RegisterDeviceSchema, status: 204 },
   { method: "delete", path: "/me/devices", tag: "Alerts", summary: "Unregister push device token", auth: "user", body: C.RegisterDeviceSchema, status: 204 },
+  // ---- App: photo uploads (presigned S3) ----
+  { method: "post", path: "/media/uploads", tag: "Media", summary: "Presigned PUT URLs for WebP photos (one per file); upload straight to S3, then send the returned keys in the report", auth: "user", body: C.CreateUploadUrlsSchema, status: 201 },
   // ---- Public ----
   { method: "get", path: "/public/reports/{ref}", tag: "Public web", summary: "Shared report page data (coarse area only)" },
   { method: "get", path: "/impact", tag: "Impact", summary: "Impact overview: totals per currency, recent allocations" },

@@ -1,0 +1,26 @@
+import { systemClock, type Clock } from "@/backend/shared/application/clock";
+import { serverEnv } from "@/backend/shared/config/env";
+import { sharedRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
+import type { Authenticator } from "@/backend/shared/presentation/auth";
+import { MediaUploads, type ObjectStorage, type UploadPolicy } from "./application/media.usecases";
+import { S3ObjectStorage, UnconfiguredObjectStorage } from "./infrastructure/s3-object-storage";
+import { MediaController } from "./presentation/media.controller";
+
+/** S3 when a bucket is configured, otherwise a stub that answers 503. */
+function storageFromEnv(): ObjectStorage {
+  const env = serverEnv();
+  if (!env.S3_BUCKET || !env.S3_REGION) return new UnconfiguredObjectStorage();
+  const hasKeys = env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY;
+  return new S3ObjectStorage({
+    bucket: env.S3_BUCKET,
+    region: env.S3_REGION,
+    endpoint: env.S3_ENDPOINT,
+    forcePathStyle: env.S3_FORCE_PATH_STYLE === "true",
+    credentials: hasKeys ? { accessKeyId: env.S3_ACCESS_KEY_ID!, secretAccessKey: env.S3_SECRET_ACCESS_KEY! } : undefined,
+  });
+}
+
+export function createMediaModule(deps: { auth: Authenticator; policy: UploadPolicy; storage?: ObjectStorage; clock?: Clock }) {
+  const uploads = new MediaUploads(deps.storage ?? storageFromEnv(), deps.policy, sharedRateLimiter(), deps.clock ?? systemClock);
+  return { uploads, controller: new MediaController(deps.auth, uploads) };
+}

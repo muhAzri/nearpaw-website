@@ -1,9 +1,11 @@
+import { serverEnv } from "@/backend/shared/config/env";
 import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { createAdminModule } from "@/backend/modules/admin";
 import { createAlertsModule } from "@/backend/modules/alerts";
 import { createAuditModule } from "@/backend/modules/audit";
 import { createIdentityModule } from "@/backend/modules/identity";
+import { createMediaModule } from "@/backend/modules/media";
 import { createImpactModule } from "@/backend/modules/impact";
 import { createRegionsModule } from "@/backend/modules/regions";
 import { createReportsModule } from "@/backend/modules/reports";
@@ -27,7 +29,10 @@ function compose() {
   const identity = createIdentityModule({ audit: audit.recorder });
   late.authenticator = identity.authenticator;
 
-  const regions = createRegionsModule({ auth, audit: audit.recorder });
+  const regions = createRegionsModule({ auth, audit: audit.recorder, mediaBaseUrl: serverEnv().S3_PUBLIC_BASE_URL });
+
+  // Restricted or suspended accounts can't upload photos either.
+  const media = createMediaModule({ auth, policy: { assertCanUpload: (userId) => identity.queries.assertCanContribute(userId) } });
 
   const alerts = createAlertsModule({
     auth,
@@ -76,6 +81,7 @@ function compose() {
     identity: identityController,
     audit: audit.controller,
     regions: regions.controller,
+    media: media.controller,
     reports: reports.reportsController,
     moderation: reports.moderationController,
     alerts: alerts.controller,
