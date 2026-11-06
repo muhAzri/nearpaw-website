@@ -15,6 +15,7 @@ const STATUS_BY_KIND: Record<DomainErrorKind, number> = {
   unauthorized: 401,
   too_large: 413,
   rate_limited: 429,
+  unavailable: 503,
 };
 
 export const ok = <T>(data: T, status = 200) =>

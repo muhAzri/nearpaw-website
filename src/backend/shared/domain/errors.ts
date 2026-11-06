@@ -9,7 +9,8 @@ export type DomainErrorKind =
   | "forbidden"
   | "unauthorized"
   | "too_large"
-  | "rate_limited";
+  | "rate_limited"
+  | "unavailable";
 
 export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKind;
@@ -58,4 +59,10 @@ export class ForbiddenError extends DomainError {
 export class RateLimitedError extends DomainError {
   readonly kind = "rate_limited";
   readonly code: string = "RATE_LIMITED";
+}
+
+/** A dependency the feature needs isn't configured or reachable (HTTP 503). */
+export class ServiceUnavailableError extends DomainError {
+  readonly kind = "unavailable";
+  readonly code: string = "SERVICE_UNAVAILABLE";
 }
