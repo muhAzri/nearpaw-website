@@ -68,6 +68,31 @@ const report = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("nearpaw backend", () => {
+  it("hands out photo uploads only to signed-in users and answers 503 until storage is configured", async () => {
+    const files = [{ contentType: "image/webp", sizeBytes: 150_000 }];
+    expect((await call("POST", "media/uploads", { body: { purpose: "report", files } })).status).toBe(401);
+    const token = await signIn("rina.wijaya91");
+    const res = await call("POST", "media/uploads", { token, body: { purpose: "report", files } });
+    expect(res.status).toBe(503);
+    expect(res.json.error?.code).toBe("SERVICE_UNAVAILABLE");
+    const bad = await call("POST", "media/uploads", { token, body: { purpose: "report", files: [{ contentType: "image/png", sizeBytes: 10 }] } });
+    expect(bad.status).toBe(422);
+  });
+
+  it("only lets people attach photos they uploaded", async () => {
+    const token = await signIn("dewi.lestari88");
+    const foreign = await call("POST", "reports", { token, body: report({ photos: ["public/report/someone-else/abc123.webp"] }) });
+    expect(foreign.status).toBe(422);
+    expect(foreign.json.error?.message).toMatch(/uploaded by you/);
+    const me = (await call("GET", "me", { token })).json.data.id as string;
+    const mine = await call("POST", "reports", { token, body: report({ photos: [`public/report/${me}/abc123.webp`] }) });
+    expect(mine.status).toBe(201);
+  });
+
+  it("exposes the media base URL in the launch config", async () => {
+    expect((await call("GET", "config")).json.data).toHaveProperty("mediaBaseUrl");
+  });
+
   it("reports health and public config", async () => {
     const cfg = await call("GET", "config");
     expect(cfg.status).toBe(200);
