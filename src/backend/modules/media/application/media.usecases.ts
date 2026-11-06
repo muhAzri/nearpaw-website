@@ -36,6 +36,16 @@ export interface UploadPolicy {
 export const UPLOAD_URL_TTL_SECONDS = 300;
 export const UPLOAD_REQUESTS_PER_HOUR = 20;
 
+/** One signed upload: the photo, and (when the app declared one) its thumbnail. */
+export interface SignedUpload {
+  key: string;
+  uploadUrl: string;
+  method: "PUT";
+  headers: Record<string, string>;
+  expiresAt: string;
+  thumbnail?: { key: string; uploadUrl: string; method: "PUT"; headers: Record<string, string>; expiresAt: string };
+}
+
 export interface UploadRequest {
   purpose: MediaPurpose;
   files: { contentType: string; sizeBytes: number; thumbnailSizeBytes?: number }[];
@@ -50,7 +60,7 @@ export class MediaUploads {
     private readonly newId: () => string = () => crypto.randomUUID().replaceAll("-", ""),
   ) {}
 
-  async createUploadUrls(user: Principal, request: UploadRequest) {
+  async createUploadUrls(user: Principal, request: UploadRequest): Promise<{ uploads: SignedUpload[] }> {
     if (request.files.length < 1 || request.files.length > MAX_FILES_PER_REQUEST) {
       throw new ValidationError(`Add between 1 and ${MAX_FILES_PER_REQUEST} photos`);
     }
@@ -73,7 +83,7 @@ export class MediaUploads {
 
     const expiresAt = new Date(this.clock.now().getTime() + UPLOAD_URL_TTL_SECONDS * 1000).toISOString();
     const uploads = await Promise.all(
-      request.files.map(async (file) => {
+      request.files.map(async (file): Promise<SignedUpload> => {
         const key = mediaKey(user.id, request.purpose, this.newId());
         const signed = await this.storage.presignUpload({
           key,
