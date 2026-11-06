@@ -30,6 +30,11 @@ export interface ObjectStorage {
   }>;
 }
 
+/** Port: removes stored photos. Deleting a key that is already gone is not an error. */
+export interface ObjectEraser {
+  deleteObjects(keys: readonly string[]): Promise<void>;
+}
+
 /** Port: may this user upload right now (not restricted/suspended)? */
 export interface UploadPolicy {
   assertCanUpload(userId: string): Promise<void>;
