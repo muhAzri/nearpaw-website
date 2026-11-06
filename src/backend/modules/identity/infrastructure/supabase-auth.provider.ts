@@ -1,4 +1,4 @@
-import { AuthProviderError, type AuthFailure, type AuthIdentity, type CredentialAuthProvider } from "../application/ports";
+import { AuthProviderError, type AuthFailure, type AuthIdentity, type CredentialAuthProvider, type ProviderSession } from "../application/ports";
 
 interface GoTrueError {
   error_code?: string;
@@ -17,6 +17,22 @@ interface GoTrueUser {
   confirmed_at?: string | null;
 }
 
+/** GoTrue answers a refresh with one of these when the token is unknown, already used, expired or its session is gone. */
+const SESSION_ENDED_CODES = new Set(["refresh_token_not_found", "refresh_token_already_used", "session_not_found", "session_expired", "invalid_grant", "user_not_found"]);
+
+interface GoTrueSession {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  user?: GoTrueUser;
+}
+
+function toSession(json: unknown): ProviderSession {
+  const s = json as GoTrueSession;
+  if (!s.access_token || !s.refresh_token || !s.user?.id) throw new AuthProviderError("unavailable");
+  return { userId: s.user.id, accessToken: s.access_token, refreshToken: s.refresh_token, expiresInSeconds: s.expires_in ?? 3600 };
+}
+
 /**
  * Supabase Auth (GoTrue) over its REST API, called with the publishable key only.
  * Email delivery, confirmation and reset links are handled by Supabase, so the SMTP provider,
@@ -32,12 +48,16 @@ export class SupabaseAuthProvider implements CredentialAuthProvider {
     this.base = `${url.replace(/\/+$/, "")}/auth/v1`;
   }
 
-  private async call(path: string, body: unknown): Promise<{ ok: boolean; status: number; json: unknown }> {
+  private async call(path: string, body: unknown, accessToken?: string): Promise<{ ok: boolean; status: number; json: unknown }> {
     let res: Response;
     try {
       res = await fetch(`${this.base}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json", apikey: this.publishableKey },
+        headers: {
+          "content-type": "application/json",
+          apikey: this.publishableKey,
+          ...(accessToken && { authorization: `Bearer ${accessToken}` }),
+        },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(10_000),
         cache: "no-store",
@@ -57,6 +77,7 @@ export class SupabaseAuthProvider implements CredentialAuthProvider {
     else if (code === "email_not_confirmed") reason = "email_not_confirmed";
     else if (code === "user_already_exists" || code === "email_exists") reason = "already_registered";
     else if (status === 429 || code.includes("rate_limit")) reason = "rate_limited";
+    else if (SESSION_ENDED_CODES.has(code)) reason = "session_ended";
     else reason = "unavailable";
     return new AuthProviderError(reason);
   }
@@ -73,12 +94,28 @@ export class SupabaseAuthProvider implements CredentialAuthProvider {
     return { id: user.id, email: user.email ?? email, emailConfirmed };
   }
 
-  async signIn(email: string, password: string): Promise<AuthIdentity> {
+  async signIn(email: string, password: string) {
     const res = await this.call("/token?grant_type=password", { email, password });
     if (!res.ok) throw this.failure(res.status, res.json);
     const user = (res.json as { user?: GoTrueUser }).user;
     if (!user?.id) throw new AuthProviderError("unavailable");
-    return { id: user.id, email: user.email ?? email, emailConfirmed: true };
+    const identity: AuthIdentity = { id: user.id, email: user.email ?? email, emailConfirmed: true };
+    return { identity, session: toSession(res.json) };
+  }
+
+  async refresh(refreshToken: string): Promise<ProviderSession> {
+    const res = await this.call("/token?grant_type=refresh_token", { refresh_token: refreshToken });
+    if (!res.ok) {
+      const failure = this.failure(res.status, res.json);
+      // A 4xx we don't recognise still means this refresh token is no good; only 429 and 5xx are hiccups.
+      if (failure.reason === "unavailable" && res.status >= 400 && res.status < 500 && res.status !== 429) throw new AuthProviderError("session_ended");
+      throw failure;
+    }
+    return toSession(res.json);
+  }
+
+  async signOut(accessToken: string): Promise<void> {
+    await this.call("/logout?scope=local", {}, accessToken);
   }
 
   async sendPasswordReset(email: string): Promise<void> {
@@ -98,7 +135,9 @@ export class UnconfiguredAuthProvider implements CredentialAuthProvider {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not configured");
   }
   signUp = async (): Promise<AuthIdentity> => this.fail();
-  signIn = async (): Promise<AuthIdentity> => this.fail();
+  signIn = async (): Promise<never> => this.fail();
+  refresh = async (): Promise<never> => this.fail();
+  signOut = async (): Promise<void> => this.fail();
   sendPasswordReset = async (): Promise<void> => this.fail();
   resendConfirmation = async (): Promise<void> => this.fail();
 }

@@ -8,13 +8,12 @@ import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
 import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
+import { ProfileProvisioner } from "./application/profile-provisioner";
 import { EndSession, RefreshSession, SessionIssuer } from "./application/session.usecases";
-import type { AccountDataCleaner, UserActivityReader } from "./application/ports";
+import type { AccessTokenVerifier, AccountDataCleaner, UserActivityReader } from "./application/ports";
 import { DevAuthProvider } from "./infrastructure/dev-auth.provider";
 import { InMemoryLoginAttempts } from "./infrastructure/in-memory-login-attempts";
-import { HmacTokenService } from "./infrastructure/hmac-token.service";
-import { InMemoryRefreshTokenRepository } from "./infrastructure/in-memory-refresh-tokens";
-import { CryptoRefreshTokenCodec } from "./infrastructure/refresh-token-codec";
+import { JwtAccessTokenVerifier } from "./infrastructure/jwt-access-token.verifier";
 import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
 import { IdentityController } from "./presentation/identity.controller";
@@ -30,41 +29,38 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   const users = singleton("users_repo", () => new InMemoryUserRepository());
   const blocks = singleton("blocks_repo", () => new InMemoryBlockRepository());
   const attempts = singleton("login_attempts", () => new InMemoryLoginAttempts());
-  const refreshTokens = singleton("refresh_tokens_repo", () => new InMemoryRefreshTokenRepository());
-  const codec = new CryptoRefreshTokenCodec();
-  const tokens = singleton("token_service", () =>
-    env.AUTH_SECRET ? new HmacTokenService(env.AUTH_SECRET) : HmacTokenService.withEphemeralSecret(),
-  );
   // Supabase Auth when configured; an in-memory stand-in outside production so local work needs no project.
-  const credentials =
-    env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-      ? new SupabaseAuthProvider(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
-      : env.NODE_ENV === "production"
-        ? new UnconfiguredAuthProvider()
-        : singleton("dev_auth", () => new DevAuthProvider(env.NODE_ENV !== "test"));
+  const supabase = env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? { url: env.NEXT_PUBLIC_SUPABASE_URL, key: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY } : null;
+  const dev = !supabase && env.NODE_ENV !== "production" ? singleton("dev_auth", () => new DevAuthProvider(env.NODE_ENV !== "test")) : null;
+  const credentials = supabase ? new SupabaseAuthProvider(supabase.url, supabase.key) : (dev ?? new UnconfiguredAuthProvider());
+  const verifier: AccessTokenVerifier = supabase
+    ? env.SUPABASE_JWT_SECRET
+      ? JwtAccessTokenVerifier.forSupabaseSecret(supabase.url, env.SUPABASE_JWT_SECRET)
+      : JwtAccessTokenVerifier.forSupabaseJwks(supabase.url)
+    : (dev?.verifier ?? { verify: async () => null });
   const limiter = sharedRateLimiter();
-  const passwords = new PasswordAuthenticator(users, credentials, attempts, clock, env.ADMIN_EMAIL, async (scope, email) => {
+  const profiles = new ProfileProvisioner(users, clock, env.ADMIN_EMAIL);
+  const passwords = new PasswordAuthenticator(profiles, credentials, attempts, clock, async (scope, email) => {
     if (scope === "admin") await deps.audit.record({ actor: SYSTEM_ACTOR, action: "admin.lockout", target: maskEmail(email) });
   });
 
   const queries = new UserQueries(users, blocks, clock);
-  const sessions = new SessionIssuer(tokens, refreshTokens, codec, clock);
+  const sessions = new SessionIssuer();
 
-  /** Banned/deleted accounts lose access immediately, even with an unexpired token. */
+  /**
+   * The JWT proves who is calling; the profile decides what they may do. A profile that doesn't exist yet is created
+   * on the spot, so losing the profile store never rejects a valid token. Banned/deleted accounts lose access at once.
+   */
   const authenticator: Authenticator = {
     async authenticate(token) {
-      const principal = tokens.verify(token);
-      if (!principal) return null;
-      if (principal.role === "user") {
-        const user = await users.findById(principal.id);
-        if (!user || user.status === "deleted" || user.status === "banned") return null;
-      }
+      const who = await verifier.verify(token);
+      if (!who) return null;
+      let user = await users.findById(who.sub);
+      if (!user && who.email) user = await profiles.ensure({ id: who.sub, email: who.email });
+      if (!user || user.status === "deleted" || user.status === "banned") return null;
       // Admin access follows the database role, so removing it takes effect immediately.
-      if (principal.role === "admin") {
-        const admin = await users.findById(principal.id);
-        if (!admin || admin.role !== "admin" || admin.status !== "active") return null;
-      }
-      return principal;
+      if (user.role === "admin" && user.status !== "active") return null;
+      return { id: user.id, role: user.role === "admin" ? "admin" : "user" };
     },
   };
 
@@ -76,11 +72,11 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
       new SignInWithPassword(passwords, sessions),
       new RequestPasswordReset(credentials, limiter),
       new ResendVerification(credentials, limiter),
-      new AdminLogin(passwords, tokens, deps.audit),
-      new AccountService(users, blocks, late.cleaner, clock, sessions),
+      new AdminLogin(passwords, deps.audit),
+      new AccountService(users, blocks, late.cleaner, clock),
       new UserAdmin(users, blocks, late.activity, deps.audit),
-      new RefreshSession(sessions, refreshTokens, users, codec, limiter, clock),
-      new EndSession(refreshTokens, codec, clock),
+      new RefreshSession(sessions, credentials, users, limiter),
+      new EndSession(credentials),
     );
   }
 

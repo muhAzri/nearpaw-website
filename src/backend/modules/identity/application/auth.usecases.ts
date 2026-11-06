@@ -5,12 +5,11 @@ import { Email, maskEmail } from "@/backend/shared/domain/email";
 import { ConflictError, ForbiddenError, RateLimitedError, UnauthorizedError, ValidationError } from "@/backend/shared/domain/errors";
 import { afterFailure, isLocked } from "../domain/login-policy";
 import { assertAcceptablePassword } from "../domain/password-policy";
-import { DEFAULT_DISPLAY_NAME, type User } from "../domain/user";
-import type { UserRepository } from "../domain/repositories";
-import { AuthProviderError, type AuthIdentity, type CredentialAuthProvider, type LoginAttemptStore, type SessionStarter, type TokenService } from "./ports";
+import type { User } from "../domain/user";
+import { AuthProviderError, type AuthIdentity, type CredentialAuthProvider, type LoginAttemptStore, type ProviderSession } from "./ports";
+import type { ProfileProvisioner } from "./profile-provisioner";
+import type { SessionIssuer } from "./session.usecases";
 import { toProfile, type SessionDto } from "./session-dto";
-
-export const ADMIN_TOKEN_TTL = 8 * 3600;
 
 export { toProfile, type SessionDto };
 
@@ -61,16 +60,14 @@ type Scope = "user" | "admin";
  */
 export class PasswordAuthenticator {
   constructor(
-    private readonly users: UserRepository,
+    private readonly profiles: ProfileProvisioner,
     private readonly provider: CredentialAuthProvider,
     private readonly attempts: LoginAttemptStore,
     private readonly clock: Clock,
-    /** The account with this email becomes an admin when its profile is first created. */
-    private readonly bootstrapAdminEmail: string | undefined,
     private readonly onLockout: (scope: Scope, email: string) => Promise<void>,
   ) {}
 
-  async authenticate(scope: Scope, rawEmail: string, password: string): Promise<User> {
+  async authenticate(scope: Scope, rawEmail: string, password: string): Promise<{ user: User; session: ProviderSession }> {
     const email = Email.create(rawEmail).value;
     const key = `${scope}:${email}`;
     const now = this.clock.now();
@@ -78,9 +75,10 @@ export class PasswordAuthenticator {
       throw new RateLimitedError("Too many attempts. Try again in 15 minutes.");
     }
 
-    let identity;
+    let identity: AuthIdentity;
+    let session: ProviderSession;
     try {
-      identity = await this.provider.signIn(email, password);
+      ({ identity, session } = await this.provider.signIn(email, password));
     } catch (e) {
       if (e instanceof AuthProviderError) {
         if (e.reason === "email_not_confirmed") {
@@ -102,25 +100,10 @@ export class PasswordAuthenticator {
     }
     this.attempts.clear(key);
 
-    let user = await this.users.findById(identity.id);
-    if (user?.status === "banned") throw new ForbiddenError("This account can't be used");
-    if (user?.status === "deleted") throw new UnauthorizedError("Wrong email or password. Try again.");
-    if (!user) {
-      user = {
-        id: identity.id,
-        publicNumber: await this.users.nextPublicNumber(),
-        role: this.bootstrapAdminEmail?.toLowerCase() === email ? "admin" : "user",
-        displayName: DEFAULT_DISPLAY_NAME,
-        email: identity.email,
-        status: "active",
-        warnings: 0,
-        createdAt: now,
-        deletedAt: null,
-        tombstoneId: null,
-      };
-      await this.users.save(user);
-    }
-    return user;
+    const user = await this.profiles.ensure(identity);
+    if (user.status === "banned") throw new ForbiddenError("This account can't be used");
+    if (user.status === "deleted") throw new UnauthorizedError("Wrong email or password. Try again.");
+    return { user, session };
   }
 }
 
@@ -128,11 +111,12 @@ export class PasswordAuthenticator {
 export class SignInWithPassword {
   constructor(
     private readonly authenticator: PasswordAuthenticator,
-    private readonly sessions: SessionStarter,
+    private readonly sessions: SessionIssuer,
   ) {}
 
   async execute(input: { email: string; password: string }): Promise<SessionDto> {
-    return this.sessions.start(await this.authenticator.authenticate("user", input.email, input.password));
+    const { user, session } = await this.authenticator.authenticate("user", input.email, input.password);
+    return this.sessions.start(user, session);
   }
 }
 
@@ -179,19 +163,18 @@ export class ResendVerification {
 export class AdminLogin {
   constructor(
     private readonly authenticator: PasswordAuthenticator,
-    private readonly tokens: TokenService,
     private readonly audit: AuditRecorder,
   ) {}
 
   async execute(input: { email: string; password: string }): Promise<SessionDto> {
-    const user = await this.authenticator.authenticate("admin", input.email, input.password);
+    const { user, session } = await this.authenticator.authenticate("admin", input.email, input.password);
     if (user.role !== "admin" || user.status !== "active") {
       throw new ForbiddenError("This account doesn't have admin access.");
     }
     await this.audit.record({ actor: { kind: "admin", id: user.id }, action: "admin.login", target: user.id });
     return {
-      token: this.tokens.issue({ id: user.id, role: "admin" }, ADMIN_TOKEN_TTL),
-      expiresInSeconds: ADMIN_TOKEN_TTL,
+      token: session.accessToken,
+      expiresInSeconds: session.expiresInSeconds,
       role: "admin",
     };
   }

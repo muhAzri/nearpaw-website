@@ -10,7 +10,7 @@ import {
   UserActionSchema,
 } from "@/contracts";
 import { NotFoundError, ValidationError } from "@/backend/shared/domain/errors";
-import { requireAdmin, requireUser, type Authenticator } from "@/backend/shared/presentation/auth";
+import { bearerToken, requireAdmin, requireUser, type Authenticator } from "@/backend/shared/presentation/auth";
 import { created, noContent, ok, parseJson, parseQuery } from "@/backend/shared/presentation/http";
 import type { AccountService, UserAdmin } from "../application/account.usecases";
 import type { AdminLogin, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "../application/auth.usecases";
@@ -37,12 +37,12 @@ export class IdentityController {
 
   signIn = async (request: Request) => ok(await this.signInUser.execute(await parseJson(request, SignInSchema)));
 
-  /** Exchange a refresh token for a new access + refresh pair. The old refresh token stops working. */
+  /** Exchange a refresh token for a new access + refresh pair. The provider rotates it: the old one stops working. */
   refresh = async (request: Request) => ok(await this.refreshSession.execute((await parseJson(request, RefreshSchema)).refreshToken));
 
-  /** Sign out: revokes the whole token family so the refresh token can't be used again. Always 204. */
+  /** Sign out: ends the provider session behind the bearer token, so its refresh token stops working. Always 204. */
   signOut = async (request: Request) => {
-    await this.endSession.execute((await parseJson(request, RefreshSchema)).refreshToken);
+    await this.endSession.execute(bearerToken(request));
     return noContent();
   };
 

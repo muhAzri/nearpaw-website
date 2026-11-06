@@ -5,7 +5,7 @@ import { actorOf, type Principal } from "@/backend/shared/domain/principal";
 import type { BlockRepository, UserRepository } from "../domain/repositories";
 import { anonymize, applyAction, canContribute, userLabel, validateDisplayName, type User, type UserAction } from "../domain/user";
 import { toProfile } from "./auth.usecases";
-import type { AccountDataCleaner, SessionRevoker, UserActivityReader } from "./ports";
+import type { AccountDataCleaner, UserActivityReader } from "./ports";
 
 async function requireUser(users: UserRepository, id: string): Promise<User> {
   const user = await users.findById(id);
@@ -19,7 +19,6 @@ export class AccountService {
     private readonly blocks: BlockRepository,
     private readonly cleaner: AccountDataCleaner,
     private readonly clock: Clock,
-    private readonly sessions: SessionRevoker,
   ) {}
 
   async me(principal: Principal) {
@@ -52,8 +51,7 @@ export class AccountService {
     await this.cleaner.removeAlertData(user.id);
     await this.blocks.removeAllInvolving(user.id);
     await this.users.save(anonymize(user, this.clock.now()));
-    // The account is gone: no refresh token may bring it back to life on any device.
-    await this.sessions.revokeAll(user.id);
+    // The profile is now anonymised and marked deleted: the authenticator and token refresh both reject it from here on.
   }
 }
 

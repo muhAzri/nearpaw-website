@@ -1,7 +1,4 @@
-import type { Principal } from "@/backend/shared/domain/principal";
 import type { LoginState } from "../domain/login-policy";
-import type { User } from "../domain/user";
-import type { SessionDto } from "./session-dto";
 
 export interface AuthIdentity {
   /** Id of the account in the auth provider; also the id of our `users` row. */
@@ -11,7 +8,7 @@ export interface AuthIdentity {
   readonly emailConfirmed: boolean;
 }
 
-export type AuthFailure = "invalid_credentials" | "email_not_confirmed" | "already_registered" | "rate_limited" | "unavailable";
+export type AuthFailure = "invalid_credentials" | "email_not_confirmed" | "already_registered" | "rate_limited" | "session_ended" | "unavailable";
 
 /** Thrown by an auth provider; the use cases translate it into domain errors. */
 export class AuthProviderError extends Error {
@@ -21,19 +18,37 @@ export class AuthProviderError extends Error {
   }
 }
 
-/** Email + password accounts, verification and recovery. Implemented on top of Supabase Auth. */
+/** The JWT pair the auth provider issued. The access token is sent to the app as is; nothing is stored on our side. */
+export interface ProviderSession {
+  userId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresInSeconds: number;
+}
+
+/** Email + password accounts, verification, recovery and sessions. Implemented on top of Supabase Auth. */
 export interface CredentialAuthProvider {
   /** Creates the account, and sends the confirmation email unless the provider doesn't require one. Throws `already_registered` for a known address. */
   signUp(email: string, password: string): Promise<AuthIdentity>;
   /** Throws `invalid_credentials` or `email_not_confirmed`. */
-  signIn(email: string, password: string): Promise<AuthIdentity>;
+  signIn(email: string, password: string): Promise<{ identity: AuthIdentity; session: ProviderSession }>;
+  /** Rotates the refresh token. Throws `session_ended` when the provider no longer accepts it, `unavailable` on a hiccup. */
+  refresh(refreshToken: string): Promise<ProviderSession>;
+  /** Ends the session behind `accessToken`. Best effort. */
+  signOut(accessToken: string): Promise<void>;
   sendPasswordReset(email: string): Promise<void>;
   resendConfirmation(email: string): Promise<void>;
 }
 
-export interface TokenService {
-  issue(principal: Principal, ttlSeconds: number): string;
-  verify(token: string): Principal | null;
+/** Who an access token belongs to. `email` is what lets us create the profile the first time we see an account. */
+export interface VerifiedToken {
+  readonly sub: string;
+  readonly email?: string;
+}
+
+/** Checks the signature, issuer, audience and expiry of an access token (a standard JWT). */
+export interface AccessTokenVerifier {
+  verify(token: string): Promise<VerifiedToken | null>;
 }
 
 export interface LoginAttemptStore {
@@ -51,20 +66,4 @@ export interface UserActivityReader {
 export interface AccountDataCleaner {
   handleReports(userId: string, mode: "keep_anonymous" | "delete"): Promise<void>;
   removeAlertData(userId: string): Promise<void>;
-}
-
-/** Generates and hashes refresh tokens (random bytes + SHA-256; infrastructure because it needs a crypto library). */
-export interface RefreshTokenCodec {
-  generate(): { token: string; hash: string };
-  hash(token: string): string;
-}
-
-/** Begins a session for a freshly authenticated user. */
-export interface SessionStarter {
-  start(user: User): Promise<SessionDto>;
-}
-
-/** Ends every session of an account (account deletion). */
-export interface SessionRevoker {
-  revokeAll(userId: string): Promise<void>;
 }
