@@ -126,7 +126,7 @@ Auth: `Authorization: Bearer <token>`. Sign-in app memakai email + password lewa
 ### Belum ada (sengaja)
 
 - **Persistensi**: semua repository masih in-memory di `infrastructure/` (hilang saat restart). Ganti dengan adapter Supabase di balik port `domain/repositories.ts` tanpa mengubah use case.
-- **Push (APNs) dan email**: `PushNotifier` / `Mailer` masih placeholder yang melaporkan "tidak terkirim".
+- **Email**: `Mailer` masih placeholder yang melaporkan "tidak terkirim".
 - **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
 
 ### Upload foto (presigned URL, Cloudflare R2 / S3)
@@ -139,6 +139,12 @@ Byte gambar **tidak pernah lewat server ini**. Alurnya:
 4. App mengirim `key` ke `POST /reports` (`photos`). Key berbentuk `public/<purpose>/<userId>/<id>.webp`; server menolak key milik user lain.
 
 Konfigurasi R2 (lihat `.env.example`): `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (tanpa nama bucket), `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (token R2 "Object Read & Write" khusus bucket ini). Agar foto bisa dibaca publik, aktifkan subdomain `r2.dev` (dev) atau custom domain (produksi) di bucket, lalu isi `S3_PUBLIC_BASE_URL`; nilainya dikirim ke app lewat `GET /api/v1/config` (`mediaBaseUrl`). Tanpa `S3_BUCKET`, endpoint upload menjawab 503 `SERVICE_UNAVAILABLE`. Catatan: presigned URL hanya berfungsi di domain `r2.cloudflarestorage.com`, bukan di custom domain. Belum ada pembersihan file yatim (foto yang di-upload tetapi tidak pernah dipakai laporan); atur lifecycle rule bucket jika perlu.
+
+### Push notification (Firebase Cloud Messaging)
+
+App iOS mendaftarkan **FCM token** lewat `POST /me/devices`; saat laporan terbit, backend mengirim ke tiap perangkat lewat FCM HTTP v1 (FCM meneruskan ke APNs). Teks netral: "A new report was posted near <area>." dengan `data.ref` agar ketukan membuka laporan. Token yang dinyatakan mati oleh FCM (`UNREGISTERED`) otomatis dihapus; gangguan sementara tidak menghapus apa pun, dan kegagalan push tidak pernah menggagalkan pembuatan laporan.
+
+Konfigurasi: `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase console > Project settings > Service accounts > Generate new private key; raw atau base64) dan opsional `FIREBASE_PROJECT_ID`. Tanpa itu, alert tetap muncul di feed dalam app tetapi tidak ada push. Sisi Apple dikerjakan di luar kode: tambahkan capability Push Notifications di Xcode dan unggah APNs auth key (.p8) di Firebase console > Project settings > Cloud Messaging.
 
 ### Database (Supabase)
 
