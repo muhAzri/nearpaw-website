@@ -1,3 +1,4 @@
+import { thumbnailKey } from "@/backend/shared/domain/media-key";
 import { distanceKm, type GeoPoint } from "@/backend/shared/domain/geo";
 import type { CommunityUpdate } from "../domain/community-update";
 import { effectiveState, reportTitle, type Report } from "../domain/report";
@@ -14,7 +15,7 @@ export function toSummary(report: Report, now: Date, opts: { from?: GeoPoint; up
     locationLabel: report.locationLabel,
     region: report.areaName,
     distanceKm: opts.from ? Math.round(distanceKm(opts.from, report.location) * 100) / 100 : null,
-    thumbnail: report.photos[0] ?? null,
+    thumbnail: report.photos[0] ? thumbnailKey(report.photos[0]) : null,
     updateCount: opts.updateCount ?? 0,
     mine: opts.mine ?? false,
     createdAt: report.createdAt.toISOString(),
