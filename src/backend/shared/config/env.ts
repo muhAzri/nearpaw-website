@@ -9,6 +9,11 @@ const ServerEnvSchema = z.object({
   /** Supabase Auth (email + password). Both unset outside production = in-memory dev accounts. */
   NEXT_PUBLIC_SUPABASE_URL: blankAsUndefined(z.url().optional()),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: blankAsUndefined(z.string().min(1).optional()),
+  /**
+   * Supabase secret key (server-only, bypasses RLS). With it, accounts and alert data live in the database; without it the
+   * backend keeps them in memory, which is lost on every restart.
+   */
+  SUPABASE_SECRET_KEY: blankAsUndefined(z.string().min(20).optional()),
   /** Only for Supabase projects still on the legacy shared JWT secret. Leave unset to verify tokens against the project's JWKS. */
   SUPABASE_JWT_SECRET: blankAsUndefined(z.string().min(16).optional()),
   /** Bootstrap admin. Admin login is disabled until all three are set. */
