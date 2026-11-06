@@ -7,6 +7,8 @@ export interface AuthIdentity {
   /** Id of the account in the auth provider; also the id of our `users` row. */
   readonly id: string;
   readonly email: string;
+  /** True when the account is usable straight away (email confirmation is switched off in the auth provider). */
+  readonly emailConfirmed: boolean;
 }
 
 export type AuthFailure = "invalid_credentials" | "email_not_confirmed" | "already_registered" | "rate_limited" | "unavailable";
@@ -21,7 +23,7 @@ export class AuthProviderError extends Error {
 
 /** Email + password accounts, verification and recovery. Implemented on top of Supabase Auth. */
 export interface CredentialAuthProvider {
-  /** Creates the account and sends the confirmation email. Throws `already_registered` for a known address. */
+  /** Creates the account, and sends the confirmation email unless the provider doesn't require one. Throws `already_registered` for a known address. */
   signUp(email: string, password: string): Promise<AuthIdentity>;
   /** Throws `invalid_credentials` or `email_not_confirmed`. */
   signIn(email: string, password: string): Promise<AuthIdentity>;

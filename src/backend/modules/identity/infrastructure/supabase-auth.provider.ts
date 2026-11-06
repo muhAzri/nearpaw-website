@@ -12,6 +12,9 @@ interface GoTrueUser {
   email?: string;
   /** Empty when the address is already registered and email confirmation is on (Supabase hides the duplicate). */
   identities?: unknown[] | null;
+  /** Set when the address is already confirmed (confirmation switched off, or the link was opened). */
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
 }
 
 /**
@@ -61,11 +64,13 @@ export class SupabaseAuthProvider implements CredentialAuthProvider {
   async signUp(email: string, password: string): Promise<AuthIdentity> {
     const res = await this.call("/signup", { email, password });
     if (!res.ok) throw this.failure(res.status, res.json);
-    const payload = res.json as GoTrueUser & { user?: GoTrueUser };
+    // With email confirmation off, Supabase answers /signup with a session (access_token) and a confirmed user.
+    const payload = res.json as GoTrueUser & { user?: GoTrueUser; access_token?: string };
     const user = payload.user ?? payload;
     if (!user.id) throw new AuthProviderError("unavailable");
     if (Array.isArray(user.identities) && user.identities.length === 0) throw new AuthProviderError("already_registered");
-    return { id: user.id, email: user.email ?? email };
+    const emailConfirmed = Boolean(payload.access_token || user.email_confirmed_at || user.confirmed_at);
+    return { id: user.id, email: user.email ?? email, emailConfirmed };
   }
 
   async signIn(email: string, password: string): Promise<AuthIdentity> {
@@ -73,7 +78,7 @@ export class SupabaseAuthProvider implements CredentialAuthProvider {
     if (!res.ok) throw this.failure(res.status, res.json);
     const user = (res.json as { user?: GoTrueUser }).user;
     if (!user?.id) throw new AuthProviderError("unavailable");
-    return { id: user.id, email: user.email ?? email };
+    return { id: user.id, email: user.email ?? email, emailConfirmed: true };
   }
 
   async sendPasswordReset(email: string): Promise<void> {

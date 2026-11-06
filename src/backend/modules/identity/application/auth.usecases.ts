@@ -7,7 +7,7 @@ import { afterFailure, isLocked } from "../domain/login-policy";
 import { assertAcceptablePassword } from "../domain/password-policy";
 import { DEFAULT_DISPLAY_NAME, type User } from "../domain/user";
 import type { UserRepository } from "../domain/repositories";
-import { AuthProviderError, type CredentialAuthProvider, type LoginAttemptStore, type SessionStarter, type TokenService } from "./ports";
+import { AuthProviderError, type AuthIdentity, type CredentialAuthProvider, type LoginAttemptStore, type SessionStarter, type TokenService } from "./ports";
 import { toProfile, type SessionDto } from "./session-dto";
 
 export const ADMIN_TOKEN_TTL = 8 * 3600;
@@ -23,7 +23,10 @@ export class EmailNotVerifiedError extends ForbiddenError {
 
 const HOUR_MS = 3_600_000;
 
-/** Create account (S03b). The account only becomes usable once the emailed link is opened (S03d). */
+/**
+ * Create account (S03b). When the auth provider requires confirmation the account only becomes usable once the
+ * emailed link is opened (S03d, `verification_required`); when it doesn't, the app can sign in right away (`registered`).
+ */
 export class Register {
   constructor(
     private readonly provider: CredentialAuthProvider,
@@ -34,8 +37,9 @@ export class Register {
     const email = Email.create(input.email).value;
     assertAcceptablePassword(input.password, email);
     if (!this.limiter.allow(`register:${email}`, 5, HOUR_MS)) throw new RateLimitedError(GENERIC_RATE_LIMIT);
+    let identity: AuthIdentity;
     try {
-      await this.provider.signUp(email, input.password);
+      identity = await this.provider.signUp(email, input.password);
     } catch (e) {
       if (e instanceof AuthProviderError) {
         if (e.reason === "already_registered") throw new ConflictError("This email is already registered. Sign in instead.");
@@ -44,7 +48,8 @@ export class Register {
       }
       throw e;
     }
-    return { status: "verification_required" as const, email: maskEmail(email) };
+    const status = identity.emailConfirmed ? ("registered" as const) : ("verification_required" as const);
+    return { status, email: maskEmail(email) };
   }
 }
 

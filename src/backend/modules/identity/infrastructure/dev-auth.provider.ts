@@ -27,14 +27,14 @@ export class DevAuthProvider implements CredentialAuthProvider {
     const id = crypto.randomUUID();
     this.accounts.set(email, { id, password, confirmed: this.autoConfirm });
     if (!this.autoConfirm) this.outbox.push({ kind: "confirm", email });
-    return { id, email };
+    return { id, email, emailConfirmed: this.autoConfirm };
   }
 
   async signIn(email: string, password: string): Promise<AuthIdentity> {
     const account = this.accounts.get(email);
     if (!account || account.password !== password) throw new AuthProviderError("invalid_credentials");
     if (!account.confirmed) throw new AuthProviderError("email_not_confirmed");
-    return { id: account.id, email };
+    return { id: account.id, email, emailConfirmed: true };
   }
 
   async sendPasswordReset(email: string) {
