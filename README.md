@@ -125,7 +125,7 @@ Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + passwo
 
 ### Belum ada (sengaja)
 
-- **Persistensi**: semua repository masih in-memory di `infrastructure/` (hilang saat restart). Ganti dengan adapter Supabase di balik port `domain/repositories.ts` tanpa mengubah use case.
+- **Persistensi**: akun (`users`, `user_blocks`) dan alert (`alert_settings`, `alert_items`, `devices`) disimpan di Postgres lewat Supabase kalau `SUPABASE_SECRET_KEY` diisi (jalankan migrasi dulu, termasuk `next_user_public_number`). Tanpa key, repository in-memory dipakai dan datanya hilang saat restart. Modul lain (reports, impact, regions, support, audit) masih in-memory di `infrastructure/`; ganti dengan pola yang sama, yaitu adapter di balik port `domain/repositories.ts` tanpa mengubah use case.
 - **Email**: `Mailer` masih placeholder yang melaporkan "tidak terkirim".
 - **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
 
