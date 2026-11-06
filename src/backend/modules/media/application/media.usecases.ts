@@ -77,7 +77,7 @@ export class MediaUploads {
       }
     }
     await this.policy.assertCanUpload(user.id);
-    if (!this.limiter.allow(`upload:${user.id}`, UPLOAD_REQUESTS_PER_HOUR, HOUR_MS)) {
+    if (!(await this.limiter.allow(`upload:${user.id}`, UPLOAD_REQUESTS_PER_HOUR, HOUR_MS))) {
       throw new RateLimitedError("You've reached the hourly photo upload limit. Please try again later.");
     }
 

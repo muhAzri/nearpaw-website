@@ -40,7 +40,7 @@ export class RefreshSession {
 
   async execute(refreshToken: string): Promise<SessionDto> {
     // Legitimate clients refresh about once an hour; this only slows down a stuck client in a retry loop.
-    if (!this.limiter.allow(`refresh:${refreshToken.slice(0, 16)}`, 30, HOUR_MS)) {
+    if (!(await this.limiter.allow(`refresh:${refreshToken.slice(0, 16)}`, 30, HOUR_MS))) {
       throw new RateLimitedError("Too many requests. Please try again later.");
     }
     let session: ProviderSession;

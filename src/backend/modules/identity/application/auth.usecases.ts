@@ -35,7 +35,7 @@ export class Register {
   async execute(input: { email: string; password: string }) {
     const email = Email.create(input.email).value;
     assertAcceptablePassword(input.password, email);
-    if (!this.limiter.allow(`register:${email}`, 5, HOUR_MS)) throw new RateLimitedError(GENERIC_RATE_LIMIT);
+    if (!(await this.limiter.allow(`register:${email}`, 5, HOUR_MS))) throw new RateLimitedError(GENERIC_RATE_LIMIT);
     let identity: AuthIdentity;
     try {
       identity = await this.provider.signUp(email, input.password);
@@ -71,7 +71,7 @@ export class PasswordAuthenticator {
     const email = Email.create(rawEmail).value;
     const key = `${scope}:${email}`;
     const now = this.clock.now();
-    if (isLocked(this.attempts.get(key), now.getTime())) {
+    if (isLocked(await this.attempts.get(key), now.getTime())) {
       throw new RateLimitedError("Too many attempts. Try again in 15 minutes.");
     }
 
@@ -85,8 +85,8 @@ export class PasswordAuthenticator {
           throw new EmailNotVerifiedError("Confirm your email to sign in. Check your inbox.", { email: maskEmail(email) });
         }
         if (e.reason === "invalid_credentials") {
-          const next = afterFailure(this.attempts.get(key), now.getTime());
-          this.attempts.set(key, next);
+          const next = afterFailure(await this.attempts.get(key), now.getTime());
+          await this.attempts.set(key, next);
           if (next.lockedUntil) await this.onLockout(scope, email);
           throw new UnauthorizedError(
             scope === "admin"
@@ -98,7 +98,7 @@ export class PasswordAuthenticator {
       }
       throw e;
     }
-    this.attempts.clear(key);
+    await this.attempts.clear(key);
 
     const user = await this.profiles.ensure(identity);
     if (user.status === "banned") throw new ForbiddenError("This account can't be used");
@@ -129,7 +129,7 @@ export class RequestPasswordReset {
 
   async execute(input: { email: string }) {
     const email = Email.create(input.email).value;
-    if (!this.limiter.allow(`reset:${email}`, 3, HOUR_MS)) throw new RateLimitedError(GENERIC_RATE_LIMIT);
+    if (!(await this.limiter.allow(`reset:${email}`, 3, HOUR_MS))) throw new RateLimitedError(GENERIC_RATE_LIMIT);
     try {
       await this.provider.sendPasswordReset(email);
     } catch (e) {
@@ -149,7 +149,7 @@ export class ResendVerification {
   async execute(input: { email: string }) {
     const email = Email.create(input.email).value;
     // The app shows a 30 second countdown; the server enforces a slightly looser limit.
-    if (!this.limiter.allow(`resend:${email}`, 5, HOUR_MS)) throw new RateLimitedError(GENERIC_RATE_LIMIT);
+    if (!(await this.limiter.allow(`resend:${email}`, 5, HOUR_MS))) throw new RateLimitedError(GENERIC_RATE_LIMIT);
     try {
       await this.provider.resendConfirmation(email);
     } catch (e) {

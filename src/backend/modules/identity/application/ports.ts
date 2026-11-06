@@ -52,9 +52,9 @@ export interface AccessTokenVerifier {
 }
 
 export interface LoginAttemptStore {
-  get(key: string): LoginState | undefined;
-  set(key: string, state: LoginState): void;
-  clear(key: string): void;
+  get(key: string): Promise<LoginState | undefined>;
+  set(key: string, state: LoginState): Promise<void>;
+  clear(key: string): Promise<void>;
 }
 
 /** Implemented by the reports module (via the composition root). */

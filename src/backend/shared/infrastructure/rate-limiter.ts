@@ -1,21 +1,13 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RateLimiter } from "../application/rate-limiter";
-import { singleton } from "./singleton";
+import { unwrap } from "./supabase-admin";
 
+/** Counters live in Postgres (see `rate_limit_hit`), so every API instance shares them. */
+export class SupabaseRateLimiter implements RateLimiter {
+  constructor(private readonly db: SupabaseClient) {}
 
-export class InMemoryRateLimiter implements RateLimiter {
-  private readonly hits = new Map<string, number[]>();
-
-  allow(key: string, limit: number, windowMs: number): boolean {
-    const now = Date.now();
-    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < windowMs);
-    if (recent.length >= limit) {
-      this.hits.set(key, recent);
-      return false;
-    }
-    recent.push(now);
-    this.hits.set(key, recent);
-    return true;
+  async allow(key: string, limit: number, windowMs: number): Promise<boolean> {
+    const result = await this.db.rpc("rate_limit_hit", { p_key: key, p_max_hits: limit, p_window_seconds: Math.ceil(windowMs / 1000) });
+    return unwrap(result, "rateLimit.hit") === true;
   }
 }
-
-export const sharedRateLimiter = () => singleton("rate_limiter", () => new InMemoryRateLimiter());

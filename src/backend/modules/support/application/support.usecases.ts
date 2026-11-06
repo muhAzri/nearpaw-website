@@ -32,8 +32,8 @@ export class SupportPublic {
     private readonly clock: Clock,
   ) {}
 
-  private guard(kind: string, email: string, ip: string) {
-    if (!this.limiter.allow(`${kind}:ip:${ip}`, 10, HOUR) || !this.limiter.allow(`${kind}:email:${email.toLowerCase()}`, 5, HOUR)) {
+  private async guard(kind: string, email: string, ip: string) {
+    if (!(await this.limiter.allow(`${kind}:ip:${ip}`, 10, HOUR)) || !(await this.limiter.allow(`${kind}:email:${email.toLowerCase()}`, 5, HOUR))) {
       throw new RateLimitedError("Too many requests. Please try again later.");
     }
   }
@@ -42,7 +42,7 @@ export class SupportPublic {
     input: { topic: SupportTopic; email: string; language: "en" | "id"; message: string; reportRef?: string },
     ip: string,
   ) {
-    this.guard("support", input.email, ip);
+    await this.guard("support", input.email, ip);
     const m: SupportMessage = {
       id: crypto.randomUUID(),
       ref: generateReference("SUP"),
@@ -67,7 +67,7 @@ export class SupportPublic {
     input: { type: PrivacyType; email: string; accountIdentifier?: string; details: string },
     ip: string,
   ) {
-    this.guard("privacy", input.email, ip);
+    await this.guard("privacy", input.email, ip);
     const now = this.clock.now();
     const r: PrivacyRequest = {
       id: crypto.randomUUID(),
