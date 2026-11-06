@@ -63,6 +63,6 @@ export class InMemoryAlertRepository implements AlertRepository {
  */
 export class UnconfiguredPushNotifier implements PushNotifier {
   async send() {
-    return false;
+    return { delivered: false, invalidTokens: [] };
   }
 }

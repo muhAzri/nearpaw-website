@@ -5,9 +5,15 @@ import { publicText } from "@/backend/shared/domain/text";
 import { defaultSettings, matchDistance, type AlertItem, type AlertRadius, type AlertSettings, type ReportForAlert } from "../domain/alert";
 import type { AlertRepository } from "../domain/repositories";
 
+export interface PushOutcome {
+  /** True when at least one device was handed to the push provider. */
+  delivered: boolean;
+  /** Tokens the provider says will never work again (app uninstalled, token rotated). They are forgotten. */
+  invalidTokens: string[];
+}
+
 export interface PushNotifier {
-  /** Resolves true when handed to the push provider. */
-  send(deviceTokens: string[], message: { title: string; body: string; data: Record<string, string> }): Promise<boolean>;
+  send(deviceTokens: string[], message: { title: string; body: string; data: Record<string, string> }): Promise<PushOutcome>;
 }
 
 export interface AlertsPolicy {
@@ -90,15 +96,16 @@ export class AlertsService {
       let delivery: AlertItem["delivery"] = "skipped";
       if (tokens.length > 0) {
         // A broken push provider must never block publishing a report.
-        delivery = (await this.push
+        const outcome = await this.push
           .send(tokens, {
             title: "Nearpaw",
             body: `A new report was posted near ${settings.area?.label ?? "your area"}.`,
             data: { ref: report.ref },
           })
-          .catch(() => false))
-          ? "sent"
-          : "failed";
+          .catch((): PushOutcome => ({ delivered: false, invalidTokens: [] }));
+        delivery = outcome.delivered ? "sent" : "failed";
+        // Dead tokens only waste requests: drop them so the next report doesn't try them again.
+        await Promise.all(outcome.invalidTokens.map((token) => this.repo.removeDevice(settings.userId, token)));
       }
       await this.repo.addItem({
         id: crypto.randomUUID(),
