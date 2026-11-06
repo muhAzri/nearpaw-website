@@ -6,7 +6,7 @@ export interface Authenticator {
   authenticate(token: string): Promise<Principal | null>;
 }
 
-function bearerToken(request: Request): string | null {
+export function bearerToken(request: Request): string | null {
   const header = request.headers.get("authorization");
   const match = header?.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
@@ -20,8 +20,7 @@ export async function optionalPrincipal(request: Request, auth: Authenticator): 
 export async function requireUser(request: Request, auth: Authenticator): Promise<Principal> {
   const principal = await optionalPrincipal(request, auth);
   if (!principal) throw new UnauthorizedError("Sign in to continue");
-  if (principal.role !== "user") throw new ForbiddenError("This endpoint is for app users");
-  return principal;
+  return principal; // admins are people too: they can use the app with the same account
 }
 
 export async function requireAdmin(request: Request, auth: Authenticator): Promise<Principal> {
