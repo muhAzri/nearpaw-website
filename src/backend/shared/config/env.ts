@@ -27,6 +27,13 @@ const ServerEnvSchema = z.object({
   S3_FORCE_PATH_STYLE: blankAsUndefined(z.enum(["true", "false"]).optional()),
   /** Where `public/…` keys are served from (CloudFront or the bucket's public URL). Sent to the app in `/config`. */
   S3_PUBLIC_BASE_URL: blankAsUndefined(z.url().optional()),
+  /**
+   * Push notifications through Firebase Cloud Messaging (HTTP v1). Paste the service account JSON (Firebase console >
+   * Project settings > Service accounts > Generate new private key), raw or base64-encoded. Unset = pushes are skipped.
+   */
+  FIREBASE_SERVICE_ACCOUNT_JSON: blankAsUndefined(z.string().min(2).optional()),
+  /** Optional: defaults to the `project_id` inside the service account JSON. */
+  FIREBASE_PROJECT_ID: blankAsUndefined(z.string().min(2).optional()),
   // Add further server-only secrets here (e.g. SUPABASE_SECRET_KEY) and validate them.
 });
 
