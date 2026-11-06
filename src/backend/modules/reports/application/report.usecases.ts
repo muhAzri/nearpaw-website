@@ -1,3 +1,4 @@
+import { assertOwnedMedia } from "@/backend/shared/domain/media-key";
 import type { Clock } from "@/backend/shared/application/clock";
 import { HOUR_MS } from "@/backend/shared/application/clock";
 import { ForbiddenError, NotFoundError, RateLimitedError, ValidationError } from "@/backend/shared/domain/errors";
@@ -57,6 +58,7 @@ export class ReportService {
 
   async create(user: Principal, cmd: CreateReportCommand) {
     await this.contributors.assertCanContribute(user.id);
+    assertOwnedMedia(user.id, cmd.photos);
     const now = this.clock.now();
 
     // Reporting works anywhere. Regions are optional: they only override expiry, and gate
@@ -209,6 +211,7 @@ export class ReportService {
   // ---- community updates ----
   async addUpdate(user: Principal, ref: string, input: { type: UpdateType; note?: string; photos: string[] }) {
     await this.contributors.assertCanContribute(user.id);
+    assertOwnedMedia(user.id, input.photos);
     if (!(await this.limits.featureFlags()).communityUpdates) throw new ForbiddenError("Community updates are turned off");
     const report = await this.reports.findByRef(ref);
     const now = this.clock.now();
