@@ -121,7 +121,7 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,media/uploads,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
 Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
 
-Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Tanpa keduanya di development, akun disimpan in-memory dan langsung terkonfirmasi. Token app tetap diterbitkan backend ini. Env: lihat `.env.example`.
+Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Tanpa keduanya di development, akun disimpan in-memory dan langsung terkonfirmasi. Token sesi adalah JWT Supabase Auth (backend tidak menerbitkan token sendiri). Env: lihat `.env.example`.
 
 ### Belum ada (sengaja)
 
@@ -129,15 +129,16 @@ Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + passwo
 - **Email**: `Mailer` masih placeholder yang melaporkan "tidak terkirim".
 - **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
 
-### Sesi: access token + refresh token
+### Sesi: JWT Supabase Auth
 
-Sign-in app mengembalikan **access token** (1 jam) dan **refresh token** (opaque, 90 hari). Saat access token habis, app memanggil `POST /api/v1/auth/refresh` `{ refreshToken }` dan menerima pasangan baru; refresh token lama langsung tidak berlaku (**rotasi**, sekali pakai). `POST /api/v1/auth/sign-out` `{ refreshToken }` mencabut sesi (selalu 204).
+Sign-in mengembalikan **access token** (JWT Supabase, 1 jam) dan **refresh token** milik Supabase. Backend tidak menyimpan state sesi apa pun, jadi restart atau pindah instance tidak pernah mengakhiri sesi.
 
-- Refresh token hanya disimpan sebagai SHA-256 (tabel `refresh_tokens`, repository masih in-memory seperti yang lain).
-- **Deteksi pemakaian ulang**: token yang sudah dirotasi lalu dipakai lagi (di luar jeda 30 detik) dianggap bocor, dan seluruh keluarga token (satu sign-in) dicabut. Jeda 30 detik ada supaya respons refresh yang hilang di jaringan tidak membuat user ter-logout.
-- Satu sign-in tidak bisa diperpanjang selamanya: maksimal 180 hari sejak sign-in, setelah itu login ulang.
-- Akun banned/deleted tidak bisa refresh (sesinya dicabut); menghapus akun mencabut semua token di semua perangkat. Akun `restricted` tetap bisa refresh karena masih boleh browsing.
-- Refresh dibatasi 30 kali/jam per token. Sesi admin tidak punya refresh token (8 jam).
+- **Verifikasi**: setiap request memverifikasi JWT (tanda tangan, issuer, audience, expiry) dengan `jose` terhadap JWKS project (`/auth/v1/.well-known/jwks.json`). Project yang masih memakai JWT secret lama: isi `SUPABASE_JWT_SECRET`.
+- **Refresh**: `POST /api/v1/auth/refresh` `{ refreshToken }` diteruskan ke Supabase. Rotasi, deteksi pemakaian ulang, dan kedaluwarsa dikelola Supabase; yang ditolak menjadi 401.
+- **Sign-out**: `POST /api/v1/auth/sign-out` dengan bearer access token mengakhiri sesi di Supabase (selalu 204).
+- **Profil**: dibuat otomatis saat pertama kali akun terlihat (dari klaim `sub` dan `email`), jadi profil yang hilang karena store in-memory direset tidak membuat token valid ditolak.
+- Akun banned/deleted ditolak seketika dan tidak bisa refresh. Akun `restricted` tetap bisa refresh karena masih boleh browsing. Refresh dibatasi 30 kali/jam per token.
+- Development tanpa Supabase: `DevAuthProvider` menerbitkan JWT HS256 dengan kunci acak per proses.
 
 ### Upload foto (presigned URL, Cloudflare R2 / S3)
 
