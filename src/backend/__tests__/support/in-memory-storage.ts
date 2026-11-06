@@ -30,5 +30,5 @@ export function inMemoryBackend(): { overrides: BackendOverrides; auth: FakeAuth
     audit: new InMemoryAuditRepository(),
     rateLimiter: new InMemoryRateLimiter(),
   };
-  return { overrides: { storage, auth: { credentials: auth, verifier: auth.verifier } }, auth };
+  return { overrides: { storage, auth: { credentials: auth, verifier: auth.verifier, accounts: auth } }, auth };
 }

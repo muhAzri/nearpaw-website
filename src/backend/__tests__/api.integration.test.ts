@@ -113,6 +113,16 @@ describe("nearpaw backend", () => {
     expect((await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } })).status).toBe(401);
   });
 
+  it("erases the login record on delete, so the same email can register again", async () => {
+    const body = { email: emailOf("sari.utami88"), password: PASSWORD, acceptedTerms: true };
+    await call("POST", "auth/register", { body });
+    await confirmEmail("sari.utami88");
+    const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
+    expect((await call("DELETE", "me", { token: session.token, body: { reports: "keep_anonymous", confirm: true } })).status).toBe(204);
+    expect((await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).status).toBe(401);
+    expect((await call("POST", "auth/register", { body })).status).toBe(201);
+  });
+
   it("does not sign anyone out when the profile store is reset (restart, another instance)", async () => {
     const body = { email: emailOf("wulan.sari92"), password: PASSWORD, acceptedTerms: true };
     await call("POST", "auth/register", { body });

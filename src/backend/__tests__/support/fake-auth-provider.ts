@@ -82,6 +82,12 @@ export class FakeAuthProvider implements CredentialAuthProvider {
     for (const [token, entry] of this.refreshTokens) if (entry.userId === who.sub) this.refreshTokens.delete(token);
   }
 
+  /** Mirrors `AccountRemover`: forgets the account and ends its sessions. */
+  async remove(userId: string): Promise<void> {
+    for (const [email, account] of this.accounts) if (account.id === userId) this.accounts.delete(email);
+    for (const [token, entry] of this.refreshTokens) if (entry.userId === userId) this.refreshTokens.delete(token);
+  }
+
   async sendPasswordReset(email: string) {
     if (this.accounts.has(email)) this.outbox.push({ kind: "reset", email });
   }

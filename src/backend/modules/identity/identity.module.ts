@@ -9,9 +9,10 @@ import { AccountService, UserAdmin, UserQueries } from "./application/account.us
 import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
 import { ProfileProvisioner } from "./application/profile-provisioner";
 import { EndSession, RefreshSession, SessionIssuer } from "./application/session.usecases";
-import type { AccessTokenVerifier, AccountDataCleaner, CredentialAuthProvider, LoginAttemptStore, UserActivityReader } from "./application/ports";
+import type { AccessTokenVerifier, AccountDataCleaner, AccountRemover, CredentialAuthProvider, LoginAttemptStore, UserActivityReader } from "./application/ports";
 import type { BlockRepository, UserRepository } from "./domain/repositories";
 import { JwtAccessTokenVerifier } from "./infrastructure/jwt-access-token.verifier";
+import { SupabaseAccountRemover } from "./infrastructure/supabase-account-remover";
 import { SupabaseAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { IdentityController } from "./presentation/identity.controller";
 
@@ -19,6 +20,8 @@ import { IdentityController } from "./presentation/identity.controller";
 export interface AuthBackend {
   credentials: CredentialAuthProvider;
   verifier: AccessTokenVerifier;
+  /** Erases the provider's login record when an account is deleted. */
+  accounts: AccountRemover;
 }
 
 export function supabaseAuthFromEnv(): AuthBackend {
@@ -28,6 +31,7 @@ export function supabaseAuthFromEnv(): AuthBackend {
   if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are required for sign-in.");
   return {
     credentials: new SupabaseAuthProvider(url, key),
+    accounts: new SupabaseAccountRemover(),
     verifier: env.SUPABASE_JWT_SECRET ? JwtAccessTokenVerifier.forSupabaseSecret(url, env.SUPABASE_JWT_SECRET) : JwtAccessTokenVerifier.forSupabaseJwks(url),
   };
 }
@@ -46,7 +50,7 @@ export function createIdentityModule(deps: {
   const env = serverEnv();
   const clock = deps.clock ?? systemClock;
   const { users, blocks, loginAttempts: attempts } = deps.repos;
-  const { credentials, verifier } = deps.auth;
+  const { credentials, verifier, accounts } = deps.auth;
   const limiter = deps.limiter;
   const profiles = new ProfileProvisioner(users, clock, env.ADMIN_EMAIL);
   const passwords = new PasswordAuthenticator(profiles, credentials, attempts, clock, async (scope, email) => {
@@ -82,7 +86,7 @@ export function createIdentityModule(deps: {
       new RequestPasswordReset(credentials, limiter),
       new ResendVerification(credentials, limiter),
       new AdminLogin(passwords, deps.audit),
-      new AccountService(users, blocks, late.cleaner, clock),
+      new AccountService(users, blocks, late.cleaner, accounts, deps.audit, clock),
       new UserAdmin(users, blocks, late.activity, deps.audit),
       new RefreshSession(sessions, credentials, users, limiter),
       new EndSession(credentials),

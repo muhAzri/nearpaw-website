@@ -1,11 +1,11 @@
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import type { Clock } from "@/backend/shared/application/clock";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@/backend/shared/domain/errors";
-import { actorOf, type Principal } from "@/backend/shared/domain/principal";
+import { actorOf, SYSTEM_ACTOR, type Principal } from "@/backend/shared/domain/principal";
 import type { BlockRepository, UserRepository } from "../domain/repositories";
 import { anonymize, applyAction, canContribute, userLabel, validateDisplayName, type User, type UserAction } from "../domain/user";
 import { toProfile } from "./auth.usecases";
-import type { AccountDataCleaner, UserActivityReader } from "./ports";
+import type { AccountDataCleaner, AccountRemover, UserActivityReader } from "./ports";
 
 async function requireUser(users: UserRepository, id: string): Promise<User> {
   const user = await users.findById(id);
@@ -18,6 +18,8 @@ export class AccountService {
     private readonly users: UserRepository,
     private readonly blocks: BlockRepository,
     private readonly cleaner: AccountDataCleaner,
+    private readonly accounts: AccountRemover,
+    private readonly audit: AuditRecorder,
     private readonly clock: Clock,
   ) {}
 
@@ -52,6 +54,13 @@ export class AccountService {
     await this.blocks.removeAllInvolving(user.id);
     await this.users.save(anonymize(user, this.clock.now()));
     // The profile is now anonymised and marked deleted: the authenticator and token refresh both reject it from here on.
+    // Erase the provider's login record last. The deletion above already succeeded and cannot be retried (the account is
+    // gone for the caller), so a failure here is recorded for follow-up instead of being reported as a failed deletion.
+    try {
+      await this.accounts.remove(user.id);
+    } catch {
+      await this.audit.record({ actor: SYSTEM_ACTOR, action: "account.auth_removal_failed", target: user.id }).catch(() => {});
+    }
   }
 }
 

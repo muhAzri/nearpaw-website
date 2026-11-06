@@ -40,6 +40,12 @@ export interface CredentialAuthProvider {
   resendConfirmation(email: string): Promise<void>;
 }
 
+/** Erases the login record (email + password hash) the auth provider keeps for an account. */
+export interface AccountRemover {
+  /** Idempotent: an account the provider no longer knows is not an error. Access tokens already issued expire on their own. */
+  remove(userId: string): Promise<void>;
+}
+
 /** Who an access token belongs to. `email` is what lets us create the profile the first time we see an account. */
 export interface VerifiedToken {
   readonly sub: string;
