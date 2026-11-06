@@ -1,12 +1,10 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import { serverEnv } from "@/backend/shared/config/env";
-import { singleton } from "@/backend/shared/infrastructure/singleton";
-import { supabaseAdmin } from "@/backend/shared/infrastructure/supabase-admin";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AlertsService, type AlertsPolicy, type PushNotifier } from "./application/alerts.usecases";
+import type { AlertRepository } from "./domain/repositories";
+import { UnconfiguredPushNotifier } from "./infrastructure/unconfigured-push-notifier";
 import { FcmPushNotifier, fcmFromServiceAccount } from "./infrastructure/fcm-push-notifier";
-import { InMemoryAlertRepository, UnconfiguredPushNotifier } from "./infrastructure/in-memory-alerts.repository";
-import { SupabaseAlertRepository } from "./infrastructure/supabase-alerts.repository";
 import { AlertsController } from "./presentation/alerts.controller";
 
 /** FCM when a service account is configured; otherwise pushes are skipped and reported as not delivered. */
@@ -21,9 +19,7 @@ function pushFromEnv(): PushNotifier {
   }
 }
 
-export function createAlertsModule(deps: { auth: Authenticator; policy: AlertsPolicy; push?: PushNotifier; clock?: Clock }) {
-  const db = supabaseAdmin();
-  const repo = db ? new SupabaseAlertRepository(db) : singleton("alerts_repo", () => new InMemoryAlertRepository());
-  const service = new AlertsService(repo, deps.push ?? pushFromEnv(), deps.policy, deps.clock ?? systemClock);
+export function createAlertsModule(deps: { auth: Authenticator; policy: AlertsPolicy; repo: AlertRepository; push?: PushNotifier; clock?: Clock }) {
+  const service = new AlertsService(deps.repo, deps.push ?? pushFromEnv(), deps.policy, deps.clock ?? systemClock);
   return { service, controller: new AlertsController(deps.auth, service) };
 }

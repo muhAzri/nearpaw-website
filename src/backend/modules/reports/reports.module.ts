@@ -1,17 +1,12 @@
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
-import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { FlagService } from "./application/flag.usecases";
 import { ModerationService } from "./application/moderation.usecases";
 import type { ContributorDirectory, LimitsReader, RegionDirectory, ReportEvents } from "./application/ports";
 import { ReportService } from "./application/report.usecases";
 import { ReportStats } from "./application/stats.usecases";
-import {
-  InMemoryFlagRepository,
-  InMemoryReportRepository,
-  InMemoryUpdateRepository,
-} from "./infrastructure/in-memory.repositories";
+import type { FlagRepository, ReportRepository, UpdateRepository } from "./domain/repositories";
 import { ModerationController } from "./presentation/moderation.controller";
 import { ReportsController } from "./presentation/reports.controller";
 
@@ -22,12 +17,11 @@ export function createReportsModule(deps: {
   regions: RegionDirectory;
   limits: LimitsReader;
   events: ReportEvents;
+  repos: { reports: ReportRepository; updates: UpdateRepository; flags: FlagRepository };
   clock?: Clock;
 }) {
   const clock = deps.clock ?? systemClock;
-  const reports = singleton("reports_repo", () => new InMemoryReportRepository());
-  const updates = singleton("updates_repo", () => new InMemoryUpdateRepository());
-  const flags = singleton("flags_repo", () => new InMemoryFlagRepository());
+  const { reports, updates, flags } = deps.repos;
 
   const stats = new ReportStats(reports, updates, flags, clock);
   return {

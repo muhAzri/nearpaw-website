@@ -1,1 +1,1 @@
-export { createIdentityModule } from "./identity.module";
+export { createIdentityModule, supabaseAuthFromEnv, type AuthBackend } from "./identity.module";

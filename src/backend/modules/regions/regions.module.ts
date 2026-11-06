@@ -1,19 +1,18 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
-import { singleton } from "@/backend/shared/infrastructure/singleton";
 import { AdPlacementAdmin, ConfigAdmin, RegionAdmin, RegionQueries } from "./application/region.usecases";
-import {
-  InMemoryAdPlacementRepository,
-  InMemoryConfigRepository,
-  InMemoryRegionRepository,
-} from "./infrastructure/in-memory.repositories";
+import type { AdPlacementRepository, ConfigRepository, RegionRepository } from "./domain/repositories";
 import { RegionsController } from "./presentation/regions.controller";
 
-export function createRegionsModule(deps: { auth: Authenticator; audit: AuditRecorder; clock?: Clock; mediaBaseUrl?: string }) {
-  const regionRepo = singleton("regions_repo", () => new InMemoryRegionRepository());
-  const configRepo = singleton("config_repo", () => new InMemoryConfigRepository());
-  const placementRepo = singleton("placements_repo", () => new InMemoryAdPlacementRepository());
+export function createRegionsModule(deps: {
+  auth: Authenticator;
+  audit: AuditRecorder;
+  repos: { regions: RegionRepository; config: ConfigRepository; placements: AdPlacementRepository };
+  clock?: Clock;
+  mediaBaseUrl?: string;
+}) {
+  const { regions: regionRepo, config: configRepo, placements: placementRepo } = deps.repos;
 
   const queries = new RegionQueries(regionRepo, configRepo, placementRepo, deps.mediaBaseUrl?.replace(/\/+$/, "") ?? null);
   return {

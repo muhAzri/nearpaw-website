@@ -1,12 +1,11 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
-import { singleton } from "@/backend/shared/infrastructure/singleton";
 import { AuditService, ListAudit, RecentAudit } from "./application/audit.usecases";
-import { InMemoryAuditRepository } from "./infrastructure/in-memory-audit.repository";
+import type { AuditRepository } from "./domain/audit-record";
 import { AuditController } from "./presentation/audit.controller";
 
-export function createAuditModule(deps: { auth: Authenticator; clock?: Clock }) {
-  const repo = singleton("audit_repo", () => new InMemoryAuditRepository());
+export function createAuditModule(deps: { auth: Authenticator; repo: AuditRepository; clock?: Clock }) {
+  const repo = deps.repo;
   const service = new AuditService(repo, deps.clock ?? systemClock);
   const list = new ListAudit(repo);
   return {

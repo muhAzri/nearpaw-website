@@ -1,49 +1,53 @@
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { AuditRecorder } from "@/backend/shared/application/audit";
+import type { RateLimiter } from "@/backend/shared/application/rate-limiter";
 import { maskEmail } from "@/backend/shared/domain/email";
 import { SYSTEM_ACTOR } from "@/backend/shared/domain/principal";
 import { serverEnv } from "@/backend/shared/config/env";
-import { sharedRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
-import { singleton } from "@/backend/shared/infrastructure/singleton";
-import { supabaseAdmin } from "@/backend/shared/infrastructure/supabase-admin";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
 import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
 import { ProfileProvisioner } from "./application/profile-provisioner";
 import { EndSession, RefreshSession, SessionIssuer } from "./application/session.usecases";
-import type { AccessTokenVerifier, AccountDataCleaner, UserActivityReader } from "./application/ports";
-import { DevAuthProvider } from "./infrastructure/dev-auth.provider";
-import { InMemoryLoginAttempts } from "./infrastructure/in-memory-login-attempts";
+import type { AccessTokenVerifier, AccountDataCleaner, CredentialAuthProvider, LoginAttemptStore, UserActivityReader } from "./application/ports";
+import type { BlockRepository, UserRepository } from "./domain/repositories";
 import { JwtAccessTokenVerifier } from "./infrastructure/jwt-access-token.verifier";
-import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
-import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
-import { SupabaseBlockRepository } from "./infrastructure/supabase-block.repository";
-import { SupabaseUserRepository } from "./infrastructure/supabase-user.repository";
+import { SupabaseAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { IdentityController } from "./presentation/identity.controller";
+
+/** Sign-in and token verification, both through Supabase Auth. */
+export interface AuthBackend {
+  credentials: CredentialAuthProvider;
+  verifier: AccessTokenVerifier;
+}
+
+export function supabaseAuthFromEnv(): AuthBackend {
+  const env = serverEnv();
+  const url = env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are required for sign-in.");
+  return {
+    credentials: new SupabaseAuthProvider(url, key),
+    verifier: env.SUPABASE_JWT_SECRET ? JwtAccessTokenVerifier.forSupabaseSecret(url, env.SUPABASE_JWT_SECRET) : JwtAccessTokenVerifier.forSupabaseJwks(url),
+  };
+}
 
 /**
  * Identity is built first: it provides the Authenticator every other module needs.
  * Collaborators that depend on later modules are supplied lazily via `late`.
  */
-export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock }) {
+export function createIdentityModule(deps: {
+  audit: AuditRecorder;
+  repos: { users: UserRepository; blocks: BlockRepository; loginAttempts: LoginAttemptStore };
+  limiter: RateLimiter;
+  auth: AuthBackend;
+  clock?: Clock;
+}) {
   const env = serverEnv();
   const clock = deps.clock ?? systemClock;
-
-  // Accounts live in Postgres when the secret key is set, otherwise in memory (lost on restart).
-  const db = supabaseAdmin();
-  const users = db ? new SupabaseUserRepository(db) : singleton("users_repo", () => new InMemoryUserRepository());
-  const blocks = db ? new SupabaseBlockRepository(db) : singleton("blocks_repo", () => new InMemoryBlockRepository());
-  const attempts = singleton("login_attempts", () => new InMemoryLoginAttempts());
-  // Supabase Auth when configured; an in-memory stand-in outside production so local work needs no project.
-  const supabase = env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? { url: env.NEXT_PUBLIC_SUPABASE_URL, key: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY } : null;
-  const dev = !supabase && env.NODE_ENV !== "production" ? singleton("dev_auth", () => new DevAuthProvider(env.NODE_ENV !== "test")) : null;
-  const credentials = supabase ? new SupabaseAuthProvider(supabase.url, supabase.key) : (dev ?? new UnconfiguredAuthProvider());
-  const verifier: AccessTokenVerifier = supabase
-    ? env.SUPABASE_JWT_SECRET
-      ? JwtAccessTokenVerifier.forSupabaseSecret(supabase.url, env.SUPABASE_JWT_SECRET)
-      : JwtAccessTokenVerifier.forSupabaseJwks(supabase.url)
-    : (dev?.verifier ?? { verify: async () => null });
-  const limiter = sharedRateLimiter();
+  const { users, blocks, loginAttempts: attempts } = deps.repos;
+  const { credentials, verifier } = deps.auth;
+  const limiter = deps.limiter;
   const profiles = new ProfileProvisioner(users, clock, env.ADMIN_EMAIL);
   const passwords = new PasswordAuthenticator(profiles, credentials, attempts, clock, async (scope, email) => {
     if (scope === "admin") await deps.audit.record({ actor: SYSTEM_ACTOR, action: "admin.lockout", target: maskEmail(email) });
