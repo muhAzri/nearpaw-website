@@ -69,6 +69,42 @@ const report = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("nearpaw backend", () => {
+  it("keeps people signed in with rotating refresh tokens and ends the session on sign-out", async () => {
+    const body = { email: emailOf("indah.permata95"), password: PASSWORD, acceptedTerms: true };
+    expect((await call("POST", "auth/register", { body })).status).toBe(201);
+    await confirmEmail("indah.permata95");
+    const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
+    expect(session.expiresInSeconds).toBe(3600);
+    expect(session.refreshToken).toMatch(/^rt_/);
+    expect(session.refreshExpiresInSeconds).toBe(90 * 24 * 3600);
+
+    const renewed = await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } });
+    expect(renewed.status).toBe(200);
+    expect(renewed.json.data.refreshToken).not.toBe(session.refreshToken);
+    expect(renewed.json.data.user.email).toBe(body.email);
+    expect((await call("GET", "me", { token: renewed.json.data.token })).status).toBe(200);
+
+    // a garbled or unknown token is a plain 401 with the friendly line
+    const bad = await call("POST", "auth/refresh", { body: { refreshToken: "rt_" + "z".repeat(43) } });
+    expect(bad.status).toBe(401);
+    expect(bad.json.error?.message).toBe("Your session has ended. Please sign in again.");
+    expect((await call("POST", "auth/refresh", { body: { refreshToken: "short" } })).status).toBe(422);
+
+    // signing out is always 204 and kills the refresh token
+    expect((await call("POST", "auth/sign-out", { body: { refreshToken: renewed.json.data.refreshToken } })).status).toBe(204);
+    expect((await call("POST", "auth/refresh", { body: { refreshToken: renewed.json.data.refreshToken } })).status).toBe(401);
+    expect((await call("POST", "auth/sign-out", { body: { refreshToken: "rt_" + "q".repeat(43) } })).status).toBe(204);
+  });
+
+  it("revokes refresh tokens when an account is deleted", async () => {
+    const body = { email: emailOf("galih.pratama90"), password: PASSWORD, acceptedTerms: true };
+    await call("POST", "auth/register", { body });
+    await confirmEmail("galih.pratama90");
+    const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
+    expect((await call("DELETE", "me", { token: session.token, body: { reports: "keep_anonymous", confirm: true } })).status).toBe(204);
+    expect((await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } })).status).toBe(401);
+  });
+
   it("hands out photo uploads only to signed-in users and answers 503 until storage is configured", async () => {
     const files = [{ contentType: "image/webp", sizeBytes: 150_000 }];
     expect((await call("POST", "media/uploads", { body: { purpose: "report", files } })).status).toBe(401);
