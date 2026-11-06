@@ -7,8 +7,10 @@ export const COMPANY_NAME = "Lambda Interactive";
 export const COPYRIGHT_YEAR = new Date().getFullYear();
 export const SUPPORT_EMAIL = "support@lambdainteractive.xyz";
 
-/** App Store listing. Set NEXT_PUBLIC_APP_STORE_URL once the app is live. */
-export const APP_STORE_URL = process.env.NEXT_PUBLIC_APP_STORE_URL ?? "#";
+/** App Store Connect Apple ID of the app. */
+export const APP_STORE_ID = "6831589473";
+/** App Store listing. NEXT_PUBLIC_APP_STORE_URL overrides the default (e.g. a localized storefront link). */
+export const APP_STORE_URL = process.env.NEXT_PUBLIC_APP_STORE_URL ?? `https://apps.apple.com/app/id${APP_STORE_ID}`;
 
 /** Custom URL scheme the iOS app registers; used by "Open in the Nearpaw app". */
 const APP_SCHEME = process.env.NEXT_PUBLIC_APP_SCHEME ?? "nearpaw";

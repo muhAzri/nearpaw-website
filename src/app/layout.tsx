@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Mochiy_Pop_One, Plus_Jakarta_Sans } from "next/font/google";
-import { SITE_NAME, SITE_URL } from "@/frontend/shared/lib/site";
+import { APP_STORE_ID, SITE_NAME, SITE_URL } from "@/frontend/shared/lib/site";
 import "./globals.css";
 
 // Mochiy Pop One: screen titles and the wordmark. Plus Jakarta Sans: everything else.
@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   title: { default: `${SITE_NAME} — see animals in need, right where you are`, template: `%s · ${SITE_NAME}` },
   description:
     "Nearpaw puts community reports of animals in need on a map. Share what you find, see what others have shared, and get calm alerts for the area you choose.",
+  // Safari's Smart App Banner: opens the app when installed, otherwise links to the App Store listing.
+  itunes: { appId: APP_STORE_ID },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
