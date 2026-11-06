@@ -18,7 +18,7 @@ export const SignInSchema = z.object({
 export type SignInInput = z.infer<typeof SignInSchema>;
 
 /** Refresh the session / sign out. The refresh token is the opaque value returned by sign-in or the last refresh. */
-export const RefreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
+export const RefreshSchema = z.object({ refreshToken: z.string().min(8).max(500) });
 export type RefreshInput = z.infer<typeof RefreshSchema>;
 
 /** Forgot password (S03c) and resend confirmation email (S03d). */
