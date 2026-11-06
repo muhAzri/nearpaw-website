@@ -14,4 +14,4 @@ Read `README.md` (Struktur / Arah dependency) before adding code. Rules enforced
 - `src/app` is routing only: `/` public website, `/admin/*` admin website, `/api/v1/*` backend. Pages render `@/frontend/features/<name>`; API routes delegate to `@/backend/modules/<name>`.
 - Frontend never imports backend; it calls `/api/v1/*` via `frontend/shared/lib/api-client` using `@/contracts` schemas.
 - Backend is framework-agnostic (no `next`/`react` imports); domain has no deps, application depends on ports only.
-- No database layer yet (Supabase planned). Data access belongs in a module's `infrastructure/`, behind a `domain` repository port.
+- Supabase (Postgres and Auth) is the single source of truth. Data access belongs in a module's `infrastructure/`, behind a `domain` repository port; schema changes are new files in `supabase/migrations`.
