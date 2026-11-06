@@ -13,6 +13,20 @@ const ServerEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: blankAsUndefined(z.string().min(1).optional()),
   /** Bootstrap admin. Admin login is disabled until all three are set. */
   ADMIN_EMAIL: blankAsUndefined(z.email().optional()),
+  /**
+   * Photo storage (S3 or any S3-compatible service). The app uploads straight to the bucket through presigned URLs.
+   * `S3_BUCKET` + `S3_REGION` enable uploads; credentials come from S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY
+   * or, when both are unset, from the AWS default credential chain (IAM role, env, profile).
+   */
+  S3_BUCKET: blankAsUndefined(z.string().min(3).optional()),
+  S3_REGION: blankAsUndefined(z.string().min(2).optional()),
+  S3_ACCESS_KEY_ID: blankAsUndefined(z.string().min(1).optional()),
+  S3_SECRET_ACCESS_KEY: blankAsUndefined(z.string().min(1).optional()),
+  /** Custom endpoint for MinIO / R2 / LocalStack. */
+  S3_ENDPOINT: blankAsUndefined(z.url().optional()),
+  S3_FORCE_PATH_STYLE: blankAsUndefined(z.enum(["true", "false"]).optional()),
+  /** Where `public/…` keys are served from (CloudFront or the bucket's public URL). Sent to the app in `/config`. */
+  S3_PUBLIC_BASE_URL: blankAsUndefined(z.url().optional()),
   // Add further server-only secrets here (e.g. SUPABASE_SECRET_KEY) and validate them.
 });
 
