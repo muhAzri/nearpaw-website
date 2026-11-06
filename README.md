@@ -1,70 +1,80 @@
 # NearPaw
 
-Satu project Next.js 16 (App Router) untuk **website publik**, **admin website**, dan **backend API** NearPaw. Dipisah lewat struktur folder (bukan project terpisah), mengikuti [Texium](https://github.com/muhAzri/Texium):
+NearPaw puts community reports of animals in need on a map. This repository holds everything that is not the iOS app:
 
-- **Frontend**: Feature-Driven Architecture
-- **Backend**: Domain-Driven Design + Clean/Hexagonal layering
-- **Database**: belum ada (akan memakai Supabase). Akses data nanti ditaruh di `infrastructure/` tiap module, di balik Repository port di `domain/`
+- the **public website** (landing page, impact statements, help and legal pages, shared-report pages),
+- the **admin console** (moderation, impact, regions, support), and
+- the **backend API** (`/api/v1/*`), which the iOS app uses as well.
 
-| URL | Isi |
+It is a single Next.js 16 (App Router) project. The three parts are separated by folder structure rather than by separate projects, following the layout of [Texium](https://github.com/muhAzri/Texium):
+
+- **Frontend:** feature-driven architecture.
+- **Backend:** domain-driven design with clean/hexagonal layering.
+- **Data:** Supabase (Postgres and Auth) is the single source of truth. Photos live in Cloudflare R2 (any S3-compatible store works).
+
+| URL | Content |
 | --- | --- |
-| `/` | Website publik (feature `landing`) |
-| `/impact`, `/impact/how-we-allocate`, `/impact/allocations/[id]` | Alokasi dampak (feature `impact`, `content`) |
-| `/help`, `/about`, `/privacy`, `/terms`, `/guidelines`, `/disclaimer` | Halaman statis dan legal (feature `content`) |
-| `/support`, `/privacy-requests` | Formulir publik (feature `support`) |
-| `/r/[ref]` | Halaman share laporan (feature `shared-report`) |
-| `/admin/login`, `/admin/*` | Admin website (feature `admin`) |
-| `/api/v1/*` | Backend API, dipakai juga oleh app iOS NearPaw |
+| `/` | Public website (feature `landing`) |
+| `/impact`, `/impact/how-we-allocate`, `/impact/allocations/[id]` | Impact allocations (features `impact`, `content`) |
+| `/help`, `/about`, `/privacy`, `/terms`, `/guidelines`, `/disclaimer` | Static and legal pages (feature `content`) |
+| `/support`, `/privacy-requests` | Public forms (feature `support`) |
+| `/r/[ref]` | Shared-report page (feature `shared-report`) |
+| `/admin/login`, `/admin/*` | Admin console (feature `admin`) |
+| `/api/v1/*` | Backend API, also used by the NearPaw iOS app |
+| `/api/v1/docs`, `/api/v1/openapi.json` | Swagger UI and the OpenAPI document |
 
 ## Quick start
 
 ```bash
-cp .env.example .env     # sudah dibuat saat scaffold
+cp .env.example .env     # then fill in the values (see "Configuration")
 npm install
 npm run dev              # http://localhost:3000
 ```
 
-| Script | Fungsi |
+| Script | Purpose |
 | --- | --- |
 | `dev` / `build` / `start` | Next.js |
-| `lint` | ESLint, termasuk **aturan boundary arsitektur** |
+| `lint` | ESLint, including the **architecture boundary rules** |
 | `typecheck` | `next typegen && tsc --noEmit` |
-| `test` / `test:watch` | Vitest (domain & application) |
+| `test` / `test:watch` | Vitest (domain, application and API tests) |
 
-## Struktur
+The API refuses to start without Supabase configured; there is no in-memory fallback. Run every migration in `supabase/migrations` against your project first (see [Database](#database-supabase)).
+
+## Project structure
 
 ```
 src/
-├── app/                       ROUTING SAJA (tipis). Tidak ada logic.
-│   ├── page.tsx               -> website publik
-│   ├── admin/**               -> admin website (layout + page)
-│   └── api/v1/**/route.ts     -> adapter ke backend controller
+├── app/                       ROUTING ONLY (thin). No logic.
+│   ├── (site)/                -> public website
+│   ├── admin/**               -> admin console (layout + pages)
+│   └── api/v1/**/route.ts     -> adapters to the backend controllers
 │
-├── contracts/                 Zod schema + types + route paths.
-│                              Satu-satunya kode yang di-share FE <-> BE.
+├── contracts/                 Zod schemas, types and route paths.
+│                              The only code shared between frontend and backend.
 │
 ├── frontend/
-│   ├── features/<feature>/    api/ , components/ , hooks/ , lib/ , index.ts (PUBLIC API)
-│   │   ├── landing/           beranda publik
-│   │   ├── impact/            halaman impact publik
-│   │   ├── content/           help, about, legal, 404
-│   │   ├── support/           form support + privacy request
-│   │   ├── shared-report/     halaman share laporan
-│   │   ├── admin/             login, shell, dan semua layar console
-│   └── shared/                ui/, lib/ (api-client, site) lintas feature
+│   ├── features/<feature>/    api/, components/, hooks/, lib/, index.ts (PUBLIC API)
+│   │   ├── landing/           public home page
+│   │   ├── impact/            public impact pages
+│   │   ├── content/           help, about, legal pages, 404
+│   │   ├── support/           support form and privacy-request form
+│   │   ├── shared-report/     shared-report page
+│   │   └── admin/             login, shell and every console screen
+│   └── shared/                ui/, lib/ (api-client, site) used across features
 │
 └── backend/
     ├── modules/<module>/
-    │   ├── domain/            Entity, Value Object, Repository PORT, domain errors. Murni TS
-    │   ├── application/       Use cases + mapper ke DTO
-    │   ├── infrastructure/    Adapter data (Supabase, nanti)
-    │   ├── presentation/      HTTP controller (Web Request/Response, bukan Next)
-    │   ├── <module>.module.ts Composition root (DI manual)
-    │   └── index.ts           PUBLIC API module
-    └── shared/                domain errors, http helpers, env
+    │   ├── domain/            Entities, value objects, repository PORTS, domain errors. Pure TypeScript
+    │   ├── application/       Use cases and DTO mappers
+    │   ├── infrastructure/    Adapters (Supabase, S3/R2, FCM, ...)
+    │   ├── presentation/      HTTP controllers (Web Request/Response, not Next.js)
+    │   ├── <module>.module.ts Composition root for the module (manual DI)
+    │   └── index.ts           PUBLIC API of the module
+    ├── composition.ts         The only place where modules meet (through ports)
+    └── shared/                Domain errors, HTTP helpers, env, shared kernel
 ```
 
-### Arah dependency
+### Dependency rules
 
 ```
 app/ ──> frontend/features ──> frontend/shared ──> contracts
@@ -73,104 +83,155 @@ app/ ──> frontend/features ──> frontend/shared ──> contracts
                                      infrastructure ──────────────────┘ (implements ports)
 ```
 
-Dipaksa `npm run lint`:
+`npm run lint` enforces these rules:
 
-| Layer | Tidak boleh import |
+| Layer | Must not import |
 | --- | --- |
-| `contracts` | frontend, backend, next, react |
-| `frontend/**` | `@/backend/**`; internal feature lain |
-| `backend/**` | frontend, `app`, `next`, `react`; internal module lain |
-| `backend/**/domain` | application/infrastructure/presentation, `zod`, contracts |
-| `backend/**/application` | infrastructure/presentation |
+| `contracts` | frontend, backend, `next`, `react` |
+| `frontend/**` | `@/backend/**`; the internals of other features |
+| `backend/**` | frontend, `app`, `next`, `react`; the internals of other modules |
+| `backend/**/domain` | application, infrastructure, presentation, `zod`, contracts |
+| `backend/**/application` | infrastructure, presentation |
 
-Frontend hanya bicara ke backend lewat HTTP `/api/v1/*` (`frontend/shared/lib/api-client`), jadi backend bisa dipindah ke service lain tanpa mengubah frontend.
+The frontend talks to the backend only over HTTP (`/api/v1/*`, through `frontend/shared/lib/api-client`), so the backend can move to another service without touching the frontend.
 
-## Menambah fitur (contoh: `pets`)
+### Adding a feature (example: `pets`)
 
-1. Buat tabel `pets` di Supabase.
-2. `src/contracts/pets.contract.ts` → schema + routes; export di `contracts/index.ts`.
-3. `src/backend/modules/pets/` → `domain` → `application` → `infrastructure` → `presentation` → `pets.module.ts` → `index.ts`.
-4. `src/app/api/v1/pets/route.ts` → panggil controller (`await connection()` untuk GET dinamis).
-5. `src/frontend/features/pets/` → `api/`, `components/`, `index.ts`.
-6. `src/app/admin/pets/page.tsx` (atau halaman publik) → render dari `@/frontend/features/pets`.
+1. Create the `pets` table with a new migration in `supabase/migrations`.
+2. Add `src/contracts/pets.contract.ts` (schemas and routes) and export it from `contracts/index.ts`.
+3. Add `src/backend/modules/pets/`: `domain` → `application` → `infrastructure` → `presentation` → `pets.module.ts` → `index.ts`.
+4. Wire the module in `src/backend/composition.ts`.
+5. Add `src/app/api/v1/pets/route.ts`, calling the controller. The `route()` helper in `api/v1/_lib` opts into request-time rendering (`connection()`) and maps errors to the JSON envelope.
+6. Add `src/frontend/features/pets/` (`api/`, `components/`, `index.ts`).
+7. Add `src/app/admin/pets/page.tsx` (or a public page) that renders from `@/frontend/features/pets`.
 
-## Catatan
+## Conventions
 
-- Response envelope: `{ "data": ... }` atau `{ "error": { code, message, details } }`.
-- Admin: login lewat `/admin/login` (email + password akun Supabase dengan role admin, tanpa MFA). Token Bearer disimpan di `sessionStorage` (kedaluwarsa 8 jam); layar `/admin/*` mengarahkan ke login bila sesi tidak ada atau 401. Belum ada cookie/BFF.
-- Frontend publik mengambil data dari `/api/v1/*` di dalam `<Suspense>` (Cache Components); halaman statis tidak memanggil backend saat build.
-- Token desain (warna, font, radius) ada di `src/app/globals.css`; komponen dasar di `src/frontend/shared/ui`.
-- Teks legal bertanda `[...]` di `features/content/lib/legal-copy.ts` masih placeholder.
+- **Response envelope:** `{ "data": ... }` on success, `{ "error": { "code", "message", "details" } }` on failure.
+- **Public data fetching:** public pages call `/api/v1/*` inside `<Suspense>` (Cache Components). Static pages do not call the backend at build time.
+- **Design tokens** (colours, fonts, radii) live in `src/app/globals.css`; base components in `src/frontend/shared/ui`.
+- **Legal copy** lives in `src/frontend/features/content/lib/legal-copy.ts`, apart from the layout. Update the matching section and bump `LEGAL_META` whenever the app collects, stores or shares something new.
+- **Admin sign-in:** `/admin/login` takes the email and password of a Supabase account whose `users.role` is `admin` (no MFA). The bearer token is kept in `sessionStorage` and expires after 8 hours; `/admin/*` redirects to the login page when there is no session or the API answers 401. There is no cookie or BFF layer yet.
+
+## Configuration
+
+Copy `.env.example` to `.env` for local work, and set the same variables in your hosting provider (Vercel) for deployments. The variables that matter:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase Auth (sign-in). Required |
+| `SUPABASE_SECRET_KEY` | Server-only. Bypasses RLS; how the API reads and writes every table. Required |
+| `SUPABASE_JWT_SECRET` | Only for projects still on the legacy shared JWT secret |
+| `ADMIN_EMAIL` | Optional bootstrap: this account gets the admin role when its profile is first created |
+| `S3_*` | Photo storage (Cloudflare R2). See [Photo uploads](#photo-uploads-presigned-urls-cloudflare-r2--s3) |
+| `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_PROJECT_ID` | Push notifications. See [Push notifications](#push-notifications-firebase-cloud-messaging) |
+| `CRON_SECRET` | Authorises the scheduled housekeeping job. See [Scheduled housekeeping](#scheduled-housekeeping-vercel-cron) |
+| `NEXT_PUBLIC_SITE_URL`, `API_BASE_URL`, `NEXT_PUBLIC_API_BASE_URL` | Public origin and the base URLs the frontend uses to reach the API |
+| `NEXT_PUBLIC_APP_STORE_URL` | Optional override of the App Store link (defaults to the app's listing) |
+
+Never put the secret key in a `NEXT_PUBLIC_*` variable, commit it, or ship it to the app.
+
+## Files served from `public/`
+
+| File | Purpose |
+| --- | --- |
+| `.well-known/apple-app-site-association` | Universal links: opens the iOS app for `https://<site>/r/*`. Served as `application/json` through `headers()` in `next.config.ts`. Must answer 200 without redirects |
+| `app-ads.txt` | Authorises Google AdMob to sell the app's ad inventory. Must be served from the root of the developer website domain listed in the App Store listing |
 
 ## Backend API (v1)
 
-Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-satunya tempat modul bertemu lewat port):
+Modules live in `src/backend/modules` and are assembled in `src/backend/composition.ts`, the only place where modules meet, always through ports.
 
-| Modul | Isi |
+| Module | Responsibility |
 | --- | --- |
-| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (akun Supabase yang sama + `users.role = 'admin'`, lockout 5x/15 menit), profil, block, hapus akun (profil dianonimkan dan akun Supabase Auth dihapus), moderasi user |
-| `regions` | Region **opsional** (override expiry/support), feature flag, safety limits, ad placement global atau per region (placement terkunci tidak bisa diaktifkan) |
-| `reports` | Laporan (live langsung, expire otomatis, rate limit, kontak dilarang di teks), update komunitas, flag + auto-hide, review/keep/duplicate/hide/remove, dashboard stats |
-| `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
-| `alerts` | Pengaturan area/radius/hewan, feed, device token, fan-out saat laporan terbit |
-| `support` | Pesan support + privacy request publik (rate limit, honeypot), inbox admin (email dimasking) |
-| `media` | URL upload foto presigned (Cloudflare R2 / S3): app mengompres foto ke WebP di HP, lalu meng-upload langsung ke bucket |
-| `audit` | Log append-only + export CSV |
-| `admin` | Agregat dashboard |
+| `identity` | Email and password accounts through Supabase Auth (sign-up, email verification, password reset), admin login (same Supabase account plus `users.role = 'admin'`, locked for 15 minutes after 5 failures), profile, blocks, account deletion (profile anonymised and the Supabase Auth account deleted), user moderation |
+| `regions` | **Optional** regions (expiry and support overrides), feature flags, safety limits, ad placements globally or per region (locked placements cannot be enabled) |
+| `reports` | Reports (live immediately, expire automatically, rate limited, contact details not allowed in text), community updates, flags with auto-hide, review/keep/duplicate/hide/remove, dashboard stats, photo retention |
+| `impact` | Periods and allocations: draft → verified → published. Totals are per currency and never summed across currencies |
+| `alerts` | Area, radius and animal settings, alert feed, device tokens, fan-out when a report is published |
+| `support` | Public support messages and privacy requests (rate limit, honeypot) and the admin inbox (emails masked) |
+| `media` | Presigned photo upload URLs (Cloudflare R2 / S3) and deletion of stored photos |
+| `audit` | Append-only log with CSV export |
+| `admin` | Dashboard aggregates |
+| `housekeeping` | Scheduled cleanup endpoint (see below) |
 
-Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,media/uploads,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
-Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
+**App endpoints:** `/api/v1/{auth/{register,sign-in,refresh,sign-out,forgot-password,resend-verification},config,regions,media/uploads,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
 
-Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Keduanya wajib; tanpa itu API menolak berjalan. Token sesi adalah JWT Supabase Auth (backend tidak menerbitkan token sendiri). Env: lihat `.env.example`.
+**Admin endpoints** (admin bearer token): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
 
-### Belum ada (sengaja)
+**Auth:** `Authorization: Bearer <access token>`. The app signs in with email and password through Supabase Auth, which also sends the confirmation and password-reset emails. Session tokens are Supabase Auth JWTs; the backend does not issue tokens of its own.
 
-- **Persistensi**: Supabase adalah satu-satunya sumber data. Semua modul (users, blocks, alerts, reports, updates, flags, regions, config, ad placement, impact, support, audit, rate limit, login lockout) disimpan di Postgres lewat adapter `supabase-*.ts` di balik port `domain/repositories.ts`. `SUPABASE_SECRET_KEY` wajib; tanpa itu API gagal dengan error jelas, tidak ada fallback in-memory. Jalankan semua migrasi di `supabase/migrations` dulu. Test double in-memory hanya ada di `src/backend/__tests__/support/`.
-- **Email**: `Mailer` masih placeholder yang melaporkan "tidak terkirim".
-- **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
+### Sessions: Supabase Auth JWTs
 
-### Sesi: JWT Supabase Auth
+Sign-in returns a Supabase **access token** (JWT, 1 hour) and Supabase's **refresh token**. The backend keeps no session state, so a restart or a move to another instance never ends a session.
 
-Sign-in mengembalikan **access token** (JWT Supabase, 1 jam) dan **refresh token** milik Supabase. Backend tidak menyimpan state sesi apa pun, jadi restart atau pindah instance tidak pernah mengakhiri sesi.
+- **Verification:** every request verifies the JWT (signature, issuer, audience, expiry) with `jose` against the project's JWKS (`/auth/v1/.well-known/jwks.json`). For a project still on the legacy JWT secret, set `SUPABASE_JWT_SECRET`.
+- **Refresh:** `POST /api/v1/auth/refresh` with `{ refreshToken }` is forwarded to Supabase. Rotation, reuse detection and expiry are handled by Supabase; a rejected token becomes a 401. Refresh is limited to 30 calls per hour per token.
+- **Sign-out:** `POST /api/v1/auth/sign-out` with the bearer access token ends the session in Supabase (always 204).
+- **Profile:** created automatically the first time an account is seen (from the `sub` and `email` claims), so a missing profile row (for example after a table was emptied) never causes a valid token to be rejected.
+- **Account status:** banned and deleted accounts are rejected immediately and cannot refresh. `restricted` accounts can still refresh because they may keep browsing.
+- **Account deletion:** `DELETE /api/v1/me` anonymises the profile (email and name removed), deletes alert settings, device tokens and blocks, keeps or removes the user's live reports as chosen, and then deletes the account in Supabase Auth, so the same email can register again. If that last step fails, the deletion still succeeds for the user and the failure is recorded in the audit log as `account.auth_removal_failed` for manual follow-up.
 
-- **Verifikasi**: setiap request memverifikasi JWT (tanda tangan, issuer, audience, expiry) dengan `jose` terhadap JWKS project (`/auth/v1/.well-known/jwks.json`). Project yang masih memakai JWT secret lama: isi `SUPABASE_JWT_SECRET`.
-- **Refresh**: `POST /api/v1/auth/refresh` `{ refreshToken }` diteruskan ke Supabase. Rotasi, deteksi pemakaian ulang, dan kedaluwarsa dikelola Supabase; yang ditolak menjadi 401.
-- **Sign-out**: `POST /api/v1/auth/sign-out` dengan bearer access token mengakhiri sesi di Supabase (selalu 204).
-- **Profil**: dibuat otomatis saat pertama kali akun terlihat (dari klaim `sub` dan `email`), jadi baris profil yang hilang (misalnya tabel dikosongkan) tidak membuat token valid ditolak.
-- Akun banned/deleted ditolak seketika dan tidak bisa refresh. Akun `restricted` tetap bisa refresh karena masih boleh browsing. Refresh dibatasi 30 kali/jam per token.
+### Photo uploads (presigned URLs, Cloudflare R2 / S3)
 
-### Upload foto (presigned URL, Cloudflare R2 / S3)
+Image bytes **never pass through this server**.
 
-Byte gambar **tidak pernah lewat server ini**. Alurnya:
+1. The app downsizes the photo (max 1600 px, EXIF orientation applied, metadata and GPS removed) and compresses it to **WebP on the phone** (libwebp), so the server never processes images. It can also upload a small list thumbnail (`<id>_t.webp`) next to each photo.
+2. `POST /api/v1/media/uploads` with `{ purpose: "report" | "update", files: [{ contentType: "image/webp", sizeBytes, thumbnailSizeBytes? }] }` (signed-in users, 20 requests per hour) returns `{ uploads: [{ key, uploadUrl, method: "PUT", headers, expiresAt, thumbnail? }] }`. Each URL is valid for 5 minutes and **signs** `Content-Type`, `Content-Length` (exact size) and `Cache-Control`, so the bucket rejects any other type or size. Up to 4 files per request, 2 MB per photo.
+3. The app `PUT`s each file to its `uploadUrl` with exactly the headers returned (no `Authorization` header).
+4. The app sends the `key` to `POST /reports` (`photos`). Keys look like `public/<purpose>/<userId>/<id>.webp`; the server rejects keys that belong to another user.
 
-1. App mengecilkan foto (maks 1600 px, orientasi EXIF diterapkan, metadata/GPS dibuang) dan mengompresnya ke **WebP di HP** (libwebp), jadi server tidak perlu memproses gambar.
-2. `POST /api/v1/media/uploads` `{ purpose: "report" | "update", files: [{ contentType: "image/webp", sizeBytes }] }` (user login, rate limit 20 request/jam) → `{ uploads: [{ key, uploadUrl, method: "PUT", headers, expiresAt }] }`. URL berlaku 5 menit dan **menandatangani** `Content-Type`, `Content-Length` (ukuran persis) dan `Cache-Control`, sehingga bucket menolak file dengan tipe/ukuran lain. Maks 4 file/request, 2 MB/file.
-3. App `PUT` file ke `uploadUrl` dengan header persis seperti yang dikembalikan (tanpa `Authorization`).
-4. App mengirim `key` ke `POST /reports` (`photos`). Key berbentuk `public/<purpose>/<userId>/<id>.webp`; server menolak key milik user lain.
+**R2 setup** (see `.env.example`):
 
-Konfigurasi R2 (lihat `.env.example`): `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (tanpa nama bucket), `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (token R2 "Object Read & Write" khusus bucket ini). Agar foto bisa dibaca publik, aktifkan subdomain `r2.dev` (dev) atau custom domain (produksi) di bucket, lalu isi `S3_PUBLIC_BASE_URL`; nilainya dikirim ke app lewat `GET /api/v1/config` (`mediaBaseUrl`). Tanpa `S3_BUCKET`, endpoint upload menjawab 503 `SERVICE_UNAVAILABLE`. Catatan: presigned URL hanya berfungsi di domain `r2.cloudflarestorage.com`, bukan di custom domain. Foto laporan yang sudah expired/closed/removed dihapus oleh job harian (lihat "Housekeeping terjadwal"). Foto yatim (di-upload tetapi tidak pernah dipakai laporan) belum disapu oleh job; pasang lifecycle rule bucket (mis. hapus objek `public/` yang lebih tua dari 90 hari; aman karena expiry laporan maksimal 60 hari) sebagai pengaman.
+- `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (without the bucket name), `S3_FORCE_PATH_STYLE=true`.
+- `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`: an R2 "Object Read & Write" token scoped to this bucket.
+- To make photos publicly readable, enable the `r2.dev` subdomain (development) or connect a custom domain (production) on the bucket, then set `S3_PUBLIC_BASE_URL`. The value is sent to the app by `GET /api/v1/config` as `mediaBaseUrl`.
+- Without `S3_BUCKET`, the upload endpoint answers 503 `SERVICE_UNAVAILABLE`.
+- Presigned URLs only work on the `r2.cloudflarestorage.com` endpoint, not on a custom domain.
 
-### Housekeeping terjadwal (Vercel Cron)
+Photos of reports that are expired, closed or removed are deleted by the daily housekeeping job. Photos that were uploaded but never attached to a report are not swept by the job; as a safety net, add a bucket lifecycle rule that deletes objects under `public/` older than 90 days (safe, because a report lives at most 60 days).
 
-`vercel.json` menjadwalkan `GET /api/v1/cron/housekeeping` tiap hari 03:00 UTC (Hobby plan hanya mengizinkan sekali sehari). Endpoint menolak (503) tanpa `CRON_SECRET`, dan 401 bila header `Authorization: Bearer <CRON_SECRET>` salah. Vercel mengirim header itu otomatis setelah `CRON_SECRET` diisi di Environment Variables project (buat dengan `openssl rand -hex 32`). Tiap task jalan terpisah; satu yang gagal tidak menghentikan lainnya, dan responsnya 500 supaya terlihat gagal di log Cron.
+### Scheduled housekeeping (Vercel Cron)
 
-| Task | Isi |
+`vercel.json` schedules `GET /api/v1/cron/housekeeping` every day at 03:00 UTC (the Hobby plan allows one run per day). The endpoint answers 503 when `CRON_SECRET` is not set and 401 when the `Authorization: Bearer <CRON_SECRET>` header is wrong. Vercel sends that header automatically once `CRON_SECRET` is defined in the project's environment variables (generate one with `openssl rand -hex 32`).
+
+Tasks run one after another. A failing task does not stop the others, and the response is 500 so the run shows as failed in the Cron logs.
+
+| Task | What it does |
 | --- | --- |
-| `photos` | Hapus file foto (+ thumbnail `_t.webp`) laporan dan update-nya bila laporan expired lebih dari 3 hari, closed lebih dari 3 hari, atau removed; lalu kosongkan `photos` di database. File dihapus dulu: bila gagal, tidak ada yang dikosongkan dan run berikutnya mengulang. Maks 1000 laporan per run. |
-| `rate-limits` | Hapus baris `rate_limit_hits` yang lebih tua dari 1 hari (termasuk IP di key form support). |
+| `photos` | Deletes the photo files (and `_t.webp` thumbnails) of a report and its community updates when the report expired more than 3 days ago, was closed more than 3 days ago, or was removed, then clears the `photos` columns. Files are deleted first: if that fails, nothing is cleared and the next run retries. At most 1000 reports per run |
+| `rate-limits` | Deletes `rate_limit_hits` rows older than one day (this also drops the IP addresses stored in support-form keys) |
 
-Uji manual: `curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/v1/cron/housekeeping`.
+Manual check:
 
-### Push notification (Firebase Cloud Messaging)
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/v1/cron/housekeeping
+```
 
-App iOS mendaftarkan **FCM token** lewat `POST /me/devices`; saat laporan terbit, backend mengirim ke tiap perangkat lewat FCM HTTP v1 (FCM meneruskan ke APNs). Teks netral: "A new report was posted near <area>." dengan `data.ref` agar ketukan membuka laporan. Token yang dinyatakan mati oleh FCM (`UNREGISTERED`) otomatis dihapus; gangguan sementara tidak menghapus apa pun, dan kegagalan push tidak pernah menggagalkan pembuatan laporan.
+### Push notifications (Firebase Cloud Messaging)
 
-Konfigurasi: `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase console > Project settings > Service accounts > Generate new private key; raw atau base64) dan opsional `FIREBASE_PROJECT_ID`. Tanpa itu, alert tetap muncul di feed dalam app tetapi tidak ada push. Sisi Apple dikerjakan di luar kode: tambahkan capability Push Notifications di Xcode dan unggah APNs auth key (.p8) di Firebase console > Project settings > Cloud Messaging.
+The iOS app registers its **FCM token** with `POST /me/devices`. When a report is published, the backend sends a notification to each matching device through FCM HTTP v1, and FCM relays it to APNs. The text is neutral ("A new report was posted near <area>.") and `data.ref` lets a tap open the report. Tokens that FCM declares dead (`UNREGISTERED`) are deleted automatically. Temporary failures delete nothing, and a push failure never makes report creation fail.
+
+Configuration:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: Firebase console > Project settings > Service accounts > Generate new private key (raw JSON or base64).
+- `FIREBASE_PROJECT_ID`: optional.
+- Without them, alerts still appear in the in-app feed, but no push is sent.
+
+The Apple side is configured outside this code: enable the Push Notifications capability for the app's App ID and in Xcode, and upload an APNs auth key (`.p8`) in Firebase console > Project settings > Cloud Messaging.
 
 ### Database (Supabase)
 
-Skema dipecah per modul di `supabase/migrations/*.sql` (urut timestamp, jangan diedit setelah dijalankan; perubahan = file baru; jalankan lewat `supabase db push` atau SQL editor). RLS aktif tanpa policy: hanya server (secret key) yang boleh akses. Tiap `domain/repositories.ts` punya adapter Supabase di `infrastructure/`. `src/backend/__tests__/db.integration.test.ts` menjalankan semuanya ke database sungguhan; jalankan dengan `NEARPAW_DB_TEST_URL` dan `NEARPAW_DB_TEST_KEY` (service key) milik project dev/staging, karena test menulis baris uji.
+The schema is split per module in `supabase/migrations/*.sql`. Files are ordered by timestamp and must not be edited after they have run; a change is a new file. Apply them with `supabase db push` or in the SQL editor. Row Level Security is enabled with no policies, so only the server (using the secret key) can access the tables. Each module's `domain/repositories.ts` has a Supabase adapter in `infrastructure/`.
 
-### Cakupan global
+`src/backend/__tests__/db.integration.test.ts` runs the repositories against a real database. Run it with `NEARPAW_DB_TEST_URL` and `NEARPAW_DB_TEST_KEY` (a service key) from a dev or staging project, because the tests write rows. In-memory test doubles exist only in `src/backend/__tests__/support/`; the API itself never keeps data in memory.
 
-Pelaporan bisa dilakukan di mana saja; tidak perlu mendaftarkan region/negara. Region hanya override opsional (mis. masa expiry). Untuk membatasi hanya region aktif, nyalakan feature flag `restrictToRegions` (default mati). Expiry default: `safetyLimits.reportExpiryDays` (7).
+### Global coverage
+
+Reports can be made anywhere; no region or country needs to be registered. A region is only an optional override (for example the expiry period). To limit reporting to active regions, turn on the `restrictToRegions` feature flag (off by default). The default expiry is `safetyLimits.reportExpiryDays` (7).
+
+## Known gaps
+
+- **Email:** the support module's `Mailer` is still `UnconfiguredMailer`, which reports every reply as "not delivered". Replies to support messages and privacy requests are stored but not emailed until an adapter (SMTP, Resend, Postmark, ...) implements the `Mailer` port. Authentication emails are sent by Supabase and are not affected.
+- **CAPTCHA** on the public forms (`support`, `privacy-requests`): only a honeypot and rate limiting.
+- **Orphaned uploads:** see the lifecycle-rule note under [Photo uploads](#photo-uploads-presigned-urls-cloudflare-r2--s3).
