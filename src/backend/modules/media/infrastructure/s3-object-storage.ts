@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ServiceUnavailableError } from "@/backend/shared/domain/errors";
 import type { ObjectStorage } from "../application/media.usecases";
@@ -11,7 +11,8 @@ export interface S3StorageConfig {
   region: string;
   endpoint?: string;
   forcePathStyle?: boolean;
-  credentials?: { accessKeyId: string; secretAccessKey: string };
+  /** Static keys, or a provider. Omit to use the AWS default credential chain. */
+  credentials?: S3ClientConfig["credentials"];
 }
 
 export class S3ObjectStorage implements ObjectStorage {
@@ -36,16 +37,22 @@ export class S3ObjectStorage implements ObjectStorage {
       ContentLength: input.contentLength,
       CacheControl: MEDIA_CACHE_CONTROL,
     });
-    // Signing these headers makes S3 reject an upload whose type, size or caching differs from what we approved.
-    const url = await getSignedUrl(this.client, command, {
-      expiresIn: input.expiresInSeconds,
-      signableHeaders: new Set(["content-type", "content-length", "cache-control"]),
-    });
-    return {
-      url,
-      method: "PUT" as const,
-      headers: { "Content-Type": input.contentType, "Cache-Control": MEDIA_CACHE_CONTROL },
-    };
+    try {
+      // Signing these headers makes S3 reject an upload whose type, size or caching differs from what we approved.
+      const url = await getSignedUrl(this.client, command, {
+        expiresIn: input.expiresInSeconds,
+        signableHeaders: new Set(["content-type", "content-length", "cache-control"]),
+      });
+      return {
+        url,
+        method: "PUT" as const,
+        headers: { "Content-Type": input.contentType, "Cache-Control": MEDIA_CACHE_CONTROL },
+      };
+    } catch (error) {
+      // Typically missing or invalid credentials. Never leak details to the app; the operator sees the cause in the log.
+      console.error("[media] could not sign an upload URL", error);
+      throw new ServiceUnavailableError("Photo uploads aren't available right now.");
+    }
   }
 }
 

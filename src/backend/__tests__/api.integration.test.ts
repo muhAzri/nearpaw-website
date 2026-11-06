@@ -15,6 +15,7 @@ let call: (method: string, path: string, opts?: { token?: string; body?: unknown
 beforeAll(async () => {
   process.env.AUTH_SECRET = "x".repeat(48);
   process.env.ADMIN_EMAIL = ADMIN.email;
+  process.env.S3_PUBLIC_BASE_URL = "https://files.example.test/";
 
   // Route modules are thin; drive the same handlers through the real route files.
   const load = async (p: string) => (await import(/* @vite-ignore */ `@/app/api/v1/${p}/route`)) as Record<string, (req: Request, ctx?: unknown) => Promise<Response>>;
@@ -90,7 +91,8 @@ describe("nearpaw backend", () => {
   });
 
   it("exposes the media base URL in the launch config", async () => {
-    expect((await call("GET", "config")).json.data).toHaveProperty("mediaBaseUrl");
+    // trailing slash is trimmed so the app can append keys safely
+    expect((await call("GET", "config")).json.data.mediaBaseUrl).toBe("https://files.example.test");
   });
 
   it("reports health and public config", async () => {

@@ -3,7 +3,7 @@ import { MEDIA_CONTENT_TYPE, MEDIA_MAX_BYTES, MEDIA_MAX_FILES } from "@/contract
 import { MediaUploads, UPLOAD_REQUESTS_PER_HOUR, type ObjectStorage } from "../modules/media/application/media.usecases";
 import { S3ObjectStorage } from "../modules/media/infrastructure/s3-object-storage";
 import { InMemoryRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
-import { ForbiddenError, RateLimitedError, ValidationError } from "@/backend/shared/domain/errors";
+import { ForbiddenError, RateLimitedError, ServiceUnavailableError, ValidationError } from "@/backend/shared/domain/errors";
 import { MAX_FILES_PER_REQUEST, MAX_UPLOAD_BYTES, isOwnedMediaKey, mediaKey } from "@/backend/shared/domain/media-key";
 
 const user = { id: "u_maya42", role: "user" as const };
@@ -123,5 +123,16 @@ describe("S3ObjectStorage", () => {
     expect(url.searchParams.get("X-Amz-Credential")).toContain("/auto/s3/aws4_request");
     // R2 rejects the SDK's default CRC32 checksum parameters on presigned PUTs
     expect([...url.searchParams.keys()].filter((k) => k.toLowerCase().includes("checksum"))).toEqual([]);
+  });
+
+  it("answers 503 instead of crashing when credentials are missing or rejected", async () => {
+    const storage = new S3ObjectStorage({
+      bucket: "nearpaw",
+      region: "auto",
+      endpoint: "https://acct123.r2.cloudflarestorage.com",
+      credentials: async () => { throw new Error("Could not load credentials from any providers"); },
+    });
+    await expect(storage.presignUpload({ key: "public/report/u_maya42/id1.webp", contentType: "image/webp", contentLength: 1000, expiresInSeconds: 300 }))
+      .rejects.toBeInstanceOf(ServiceUnavailableError);
   });
 });
