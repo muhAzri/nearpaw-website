@@ -82,17 +82,17 @@ export const PRIVACY: LegalCopy = {
       title: "How long we keep it",
       body: [
         "Account data is kept while your account is open.",
-        "A report is shown on the map until it expires (7 days by default), is closed by its reporter, or is hidden or removed. Afterwards it is kept in our records, including its pin, description and photos, for moderation, abuse prevention, statistics and legal purposes, and it is no longer shown publicly. Photo files are stored at public web addresses, so a photo may stay reachable by anyone who has its direct link until the file is deleted from storage. You can ask us to delete your reports at any time.",
+        "A report is shown on the map until it expires (7 days by default), is closed by its reporter, or is hidden or removed. Afterwards the report text and pin are kept in our records for moderation, abuse prevention, statistics and legal purposes, and are no longer shown publicly. The photos of a report, and of its community updates, are deleted from our storage by an automatic daily job about 3 days after the report expires or is closed, and on the next run once it is removed. Photo files are stored at public web addresses, so until then anyone who has the direct link can still open a photo, and we cannot recall copies other people saved. You can ask us to delete your reports at any time.",
         "Alert settings, push tokens, your alert feed and your block list are deleted when you delete your account. A push token is also deleted when the notification service reports that it no longer works.",
-        "Support messages and privacy requests are kept for as long as needed to handle them and to show that we responded. The moderator audit log is append-only and is kept for accountability. Request and sign-in counters exist only to prevent abuse.",
+        "Support messages and privacy requests are kept for as long as needed to handle them and to show that we responded. The moderator audit log is append-only and is kept for accountability. Request counters used to prevent abuse, including the IP address in them, are deleted after about a day.",
       ].join("\n\n"),
     },
     {
       title: "Deleting your account",
       body: [
         "You can delete your account in the app. You choose what happens to your live reports: they can stay on the map anonymously (they then show as \"Deleted user\") or be removed from the map straight away.",
-        "When you delete your account we remove your email address and display name from your profile, delete your alert settings, push tokens and blocks, and the account can no longer be used to sign in. To have the sign-in record held by our authentication provider (your email address and hashed password) erased as well, send us a privacy request.",
-        "Reports that stay anonymous keep their pin and photos. Content already seen, copied or shared by other people is outside our control.",
+        "When you delete your account we remove your email address and display name from your profile, delete your alert settings, push tokens and blocks, and erase your sign-in record (email address and hashed password) from our authentication provider. The account can no longer be used, and you can register again later with the same email address.",
+        "Reports that stay anonymous keep their pin and photos until they expire, when the photos are deleted as described above. Content already seen, copied or shared by other people is outside our control.",
       ].join("\n\n"),
     },
     {
