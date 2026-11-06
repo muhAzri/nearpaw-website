@@ -121,11 +121,11 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,media/uploads,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
 Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
 
-Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Tanpa keduanya di development, akun disimpan in-memory dan langsung terkonfirmasi. Token sesi adalah JWT Supabase Auth (backend tidak menerbitkan token sendiri). Env: lihat `.env.example`.
+Auth: `Authorization: Bearer <access token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Keduanya wajib; tanpa itu API menolak berjalan. Token sesi adalah JWT Supabase Auth (backend tidak menerbitkan token sendiri). Env: lihat `.env.example`.
 
 ### Belum ada (sengaja)
 
-- **Persistensi**: akun (`users`, `user_blocks`) dan alert (`alert_settings`, `alert_items`, `devices`) disimpan di Postgres lewat Supabase kalau `SUPABASE_SECRET_KEY` diisi (jalankan migrasi dulu, termasuk `next_user_public_number`). Tanpa key, repository in-memory dipakai dan datanya hilang saat restart. Modul lain (reports, impact, regions, support, audit) masih in-memory di `infrastructure/`; ganti dengan pola yang sama, yaitu adapter di balik port `domain/repositories.ts` tanpa mengubah use case.
+- **Persistensi**: Supabase adalah satu-satunya sumber data. Semua modul (users, blocks, alerts, reports, updates, flags, regions, config, ad placement, impact, support, audit, rate limit, login lockout) disimpan di Postgres lewat adapter `supabase-*.ts` di balik port `domain/repositories.ts`. `SUPABASE_SECRET_KEY` wajib; tanpa itu API gagal dengan error jelas, tidak ada fallback in-memory. Jalankan semua migrasi di `supabase/migrations` dulu. Test double in-memory hanya ada di `src/backend/__tests__/support/`.
 - **Email**: `Mailer` masih placeholder yang melaporkan "tidak terkirim".
 - **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
 
@@ -136,9 +136,8 @@ Sign-in mengembalikan **access token** (JWT Supabase, 1 jam) dan **refresh token
 - **Verifikasi**: setiap request memverifikasi JWT (tanda tangan, issuer, audience, expiry) dengan `jose` terhadap JWKS project (`/auth/v1/.well-known/jwks.json`). Project yang masih memakai JWT secret lama: isi `SUPABASE_JWT_SECRET`.
 - **Refresh**: `POST /api/v1/auth/refresh` `{ refreshToken }` diteruskan ke Supabase. Rotasi, deteksi pemakaian ulang, dan kedaluwarsa dikelola Supabase; yang ditolak menjadi 401.
 - **Sign-out**: `POST /api/v1/auth/sign-out` dengan bearer access token mengakhiri sesi di Supabase (selalu 204).
-- **Profil**: dibuat otomatis saat pertama kali akun terlihat (dari klaim `sub` dan `email`), jadi profil yang hilang karena store in-memory direset tidak membuat token valid ditolak.
+- **Profil**: dibuat otomatis saat pertama kali akun terlihat (dari klaim `sub` dan `email`), jadi baris profil yang hilang (misalnya tabel dikosongkan) tidak membuat token valid ditolak.
 - Akun banned/deleted ditolak seketika dan tidak bisa refresh. Akun `restricted` tetap bisa refresh karena masih boleh browsing. Refresh dibatasi 30 kali/jam per token.
-- Development tanpa Supabase: `DevAuthProvider` menerbitkan JWT HS256 dengan kunci acak per proses.
 
 ### Upload foto (presigned URL, Cloudflare R2 / S3)
 
@@ -159,7 +158,7 @@ Konfigurasi: `FIREBASE_SERVICE_ACCOUNT_JSON` (Firebase console > Project setting
 
 ### Database (Supabase)
 
-Skema dipecah per modul di `supabase/migrations/*.sql` (urut timestamp, jangan diedit setelah dijalankan; perubahan = file baru; jalankan lewat `supabase db push` atau SQL editor). RLS aktif tanpa policy: hanya server (secret key) yang boleh akses. Adapter Supabase untuk tiap `domain/repositories.ts` **belum ditulis**; saat ini app masih memakai repository in-memory.
+Skema dipecah per modul di `supabase/migrations/*.sql` (urut timestamp, jangan diedit setelah dijalankan; perubahan = file baru; jalankan lewat `supabase db push` atau SQL editor). RLS aktif tanpa policy: hanya server (secret key) yang boleh akses. Tiap `domain/repositories.ts` punya adapter Supabase di `infrastructure/`. `src/backend/__tests__/db.integration.test.ts` menjalankan semuanya ke database sungguhan; jalankan dengan `NEARPAW_DB_TEST_URL` dan `NEARPAW_DB_TEST_KEY` (service key) milik project dev/staging, karena test menulis baris uji.
 
 ### Cakupan global
 
