@@ -13,7 +13,6 @@ type Json = { data?: any; error?: { code: string; message: string } };
 let call: (method: string, path: string, opts?: { token?: string; body?: unknown; query?: string }) => Promise<{ status: number; json: Json }>;
 
 beforeAll(async () => {
-  process.env.AUTH_SECRET = "x".repeat(48);
   process.env.ADMIN_EMAIL = ADMIN.email;
   process.env.S3_PUBLIC_BASE_URL = "https://files.example.test/";
 
@@ -75,7 +74,8 @@ describe("nearpaw backend", () => {
     await confirmEmail("indah.permata95");
     const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
     expect(session.expiresInSeconds).toBe(3600);
-    expect(session.refreshToken).toMatch(/^rt_/);
+    expect(session.refreshToken).toBeTruthy();
+    expect(session.token.split(".")).toHaveLength(3); // a standard JWT
     expect(session.refreshExpiresInSeconds).toBe(90 * 24 * 3600);
 
     const renewed = await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } });
@@ -85,24 +85,37 @@ describe("nearpaw backend", () => {
     expect((await call("GET", "me", { token: renewed.json.data.token })).status).toBe(200);
 
     // a garbled or unknown token is a plain 401 with the friendly line
-    const bad = await call("POST", "auth/refresh", { body: { refreshToken: "rt_" + "z".repeat(43) } });
+    const bad = await call("POST", "auth/refresh", { body: { refreshToken: "z".repeat(43) } });
     expect(bad.status).toBe(401);
     expect(bad.json.error?.message).toBe("Your session has ended. Please sign in again.");
     expect((await call("POST", "auth/refresh", { body: { refreshToken: "short" } })).status).toBe(422);
 
     // signing out is always 204 and kills the refresh token
-    expect((await call("POST", "auth/sign-out", { body: { refreshToken: renewed.json.data.refreshToken } })).status).toBe(204);
+    expect((await call("POST", "auth/sign-out", { token: renewed.json.data.token })).status).toBe(204);
     expect((await call("POST", "auth/refresh", { body: { refreshToken: renewed.json.data.refreshToken } })).status).toBe(401);
-    expect((await call("POST", "auth/sign-out", { body: { refreshToken: "rt_" + "q".repeat(43) } })).status).toBe(204);
+    expect((await call("POST", "auth/sign-out")).status).toBe(204);
+    expect((await call("POST", "auth/sign-out", { token: "not-a-token" })).status).toBe(204);
   });
 
-  it("revokes refresh tokens when an account is deleted", async () => {
+  it("refuses refresh tokens once an account is deleted", async () => {
     const body = { email: emailOf("galih.pratama90"), password: PASSWORD, acceptedTerms: true };
     await call("POST", "auth/register", { body });
     await confirmEmail("galih.pratama90");
     const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
     expect((await call("DELETE", "me", { token: session.token, body: { reports: "keep_anonymous", confirm: true } })).status).toBe(204);
     expect((await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } })).status).toBe(401);
+  });
+
+  it("does not sign anyone out when the profile store is reset (restart, another instance)", async () => {
+    const body = { email: emailOf("wulan.sari92"), password: PASSWORD, acceptedTerms: true };
+    await call("POST", "auth/register", { body });
+    await confirmEmail("wulan.sari92");
+    const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
+    const store = globalThis as unknown as Record<string, { users?: Map<string, unknown> }>;
+    const repo = store.__nearpaw_users_repo as unknown as { users?: Map<string, unknown> };
+    repo.users?.clear();
+    expect((await call("GET", "me", { token: session.token })).status).toBe(200);
+    expect((await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } })).status).toBe(200);
   });
 
   it("hands out photo uploads only to signed-in users and answers 503 until storage is configured", async () => {
