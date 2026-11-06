@@ -36,6 +36,11 @@ export interface ReportRepository {
   search(query: ReportQuery): Promise<Page<Report>>;
   countByReporterSince(reporterId: string, since: Date): Promise<number>;
   listByReporter(reporterId: string): Promise<Report[]>;
+  /**
+   * Reports that still hold photo keys although they are no longer worth showing: expired before `cutoff`, removed, or
+   * closed before `cutoff`. Oldest first.
+   */
+  listWithStalePhotos(cutoff: Date, limit: number): Promise<Report[]>;
 }
 
 export interface UpdateSearch {

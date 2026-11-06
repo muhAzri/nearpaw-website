@@ -163,6 +163,20 @@ export class SupabaseReportRepository implements ReportRepository {
     return { items: ((data ?? []) as ReportRow[]).map(reportFromRow), total: count ?? 0 };
   }
 
+  async listWithStalePhotos(cutoff: Date, limit: number) {
+    const at = cutoff.toISOString();
+    const rows = unwrap(
+      await this.db
+        .from("reports")
+        .select("*")
+        .neq("photos", "{}")
+        .or(`expires_at.lt.${at},state.eq.removed,and(state.eq.closed,closed_at.lt.${at})`)
+        .order("created_at", { ascending: true })
+        .limit(limit),
+      "reports.listWithStalePhotos",
+    );
+    return (rows as ReportRow[]).map(reportFromRow);
+  }
   async countByReporterSince(reporterId: string, since: Date) {
     const { count, error } = await this.db.from("reports").select("*", { count: "exact", head: true }).eq("reporter_id", reporterId).gte("created_at", since.toISOString());
     if (error) throw new Error(`reports.countByReporterSince: ${error.message}`);

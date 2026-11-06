@@ -6,6 +6,7 @@ import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { createAdminModule } from "@/backend/modules/admin";
 import { createAlertsModule } from "@/backend/modules/alerts";
 import { createAuditModule } from "@/backend/modules/audit";
+import { createHousekeepingModule } from "@/backend/modules/housekeeping";
 import { createIdentityModule, supabaseAuthFromEnv, type AuthBackend } from "@/backend/modules/identity";
 import { createMediaModule } from "@/backend/modules/media";
 import { createImpactModule } from "@/backend/modules/impact";
@@ -66,6 +67,7 @@ function compose(overrides: BackendOverrides = {}) {
     regions: regions.queries,
     limits: regions.queries,
     mediaBaseUrl: serverEnv().S3_PUBLIC_BASE_URL,
+    photos: media.eraser,
     // Alerts must never make publishing a report fail.
     events: {
       published: (report) =>
@@ -95,6 +97,16 @@ function compose(overrides: BackendOverrides = {}) {
     },
   });
 
+  // Scheduled cleanup (Vercel Cron -> GET /api/v1/cron/housekeeping, see vercel.json).
+  const housekeeping = createHousekeepingModule({
+    secret: () => serverEnv().CRON_SECRET,
+    tasks: [
+      { name: "photos", run: (now) => reports.photoRetention.run(now) },
+      // Attempts older than a day count toward no rate-limit window (the longest is one hour); this also drops the IP addresses kept in the keys.
+      { name: "rate-limits", run: async (now) => ({ removed: await storage.rateLimiter.purge(new Date(now.getTime() - 24 * 3_600_000)) }) },
+    ],
+  });
+
   return {
     identity: identityController,
     audit: audit.controller,
@@ -106,6 +118,7 @@ function compose(overrides: BackendOverrides = {}) {
     impact: impact.controller,
     support: support.controller,
     dashboard: admin.dashboard,
+    housekeeping: housekeeping.controller,
   };
 }
 

@@ -171,6 +171,26 @@ suite("postgres repositories", () => {
       expect((await reports.search({ now, states: ["hidden"], minOpenFlags: 3, sort: "most_flags", limit: 5, offset: 0 })).items.map((x) => x.id)).toContain(r.id);
     });
 
+    it("lists reports whose photos are stale: expired, removed, or closed before the cutoff", async () => {
+      const day = 86_400_000;
+      const cutoff = new Date(now.getTime() - 3 * day);
+      const photo = () => [`public/report/${rina.id}/${uid()}.webp`];
+      const expired = make({ photos: photo(), now: new Date(now.getTime() - 12 * day) });
+      const fresh = make({ photos: photo() });
+      const removed = { ...make({ photos: photo() }), state: "removed" as const };
+      const closedOld = { ...make({ photos: photo(), now: new Date(now.getTime() - 6 * day) }), state: "closed" as const, closedAt: new Date(now.getTime() - 4 * day) };
+      const noPhotos = make({ now: new Date(now.getTime() - 12 * day) });
+      for (const r of [expired, fresh, removed, closedOld, noPhotos]) await reports.add(r);
+
+      const ids = (await reports.listWithStalePhotos(cutoff, 1000)).map((x) => x.id);
+      expect(ids).toEqual(expect.arrayContaining([expired.id, removed.id, closedOld.id]));
+      expect(ids).not.toContain(fresh.id);
+      expect(ids).not.toContain(noPhotos.id);
+
+      await reports.save({ ...expired, photos: [] });
+      expect((await reports.listWithStalePhotos(cutoff, 1000)).map((x) => x.id)).not.toContain(expired.id);
+    });
+
     it("stores updates and flags", async () => {
       const r = make();
       await reports.add(r);
@@ -272,6 +292,14 @@ suite("postgres repositories", () => {
       const results = await Promise.all(Array.from({ length: 8 }, () => limiter.allow(k, 5, 3_600_000)));
       expect(results.filter(Boolean)).toHaveLength(5);
       expect(await limiter.allow(`test:${uid()}`, 1, 3_600_000)).toBe(true);
+    });
+
+    it("purges attempts older than the cutoff", async () => {
+      const limiter = new SupabaseRateLimiter(db);
+      const k = `test:${uid()}`;
+      await limiter.allow(k, 5, 3_600_000);
+      expect(await limiter.purge(new Date(Date.now() + 60_000))).toBeGreaterThanOrEqual(1);
+      expect(await limiter.allow(k, 1, 3_600_000)).toBe(true);
     });
 
     it("persists login lockouts", async () => {

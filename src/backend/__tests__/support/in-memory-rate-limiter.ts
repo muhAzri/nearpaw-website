@@ -14,4 +14,15 @@ export class InMemoryRateLimiter implements RateLimiter {
     this.hits.set(key, recent);
     return true;
   }
+
+  async purge(olderThan: Date): Promise<number> {
+    let removed = 0;
+    for (const [key, times] of this.hits) {
+      const kept = times.filter((t) => t >= olderThan.getTime());
+      removed += times.length - kept.length;
+      if (kept.length) this.hits.set(key, kept);
+      else this.hits.delete(key);
+    }
+    return removed;
+  }
 }

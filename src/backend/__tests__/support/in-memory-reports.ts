@@ -68,6 +68,12 @@ export class InMemoryReportRepository implements ReportRepository {
   async countByReporterSince(reporterId: string, since: Date) {
     return [...this.items.values()].filter((r) => r.reporterId === reporterId && r.createdAt >= since).length;
   }
+  async listWithStalePhotos(cutoff: Date, limit: number) {
+    return [...this.items.values()]
+      .filter((r) => r.photos.length > 0 && (r.expiresAt < cutoff || r.state === "removed" || (r.state === "closed" && !!r.closedAt && r.closedAt < cutoff)))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(0, limit);
+  }
   async listByReporter(reporterId: string) {
     return [...this.items.values()].filter((r) => r.reporterId === reporterId);
   }

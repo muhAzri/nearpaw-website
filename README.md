@@ -108,7 +108,7 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 
 | Modul | Isi |
 | --- | --- |
-| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (akun Supabase yang sama + `users.role = 'admin'`, lockout 5x/15 menit), profil, block, hapus akun, moderasi user |
+| `identity` | Akun email + password lewat Supabase Auth (daftar, verifikasi email, lupa password), login admin (akun Supabase yang sama + `users.role = 'admin'`, lockout 5x/15 menit), profil, block, hapus akun (profil dianonimkan dan akun Supabase Auth dihapus), moderasi user |
 | `regions` | Region **opsional** (override expiry/support), feature flag, safety limits, ad placement global atau per region (placement terkunci tidak bisa diaktifkan) |
 | `reports` | Laporan (live langsung, expire otomatis, rate limit, kontak dilarang di teks), update komunitas, flag + auto-hide, review/keep/duplicate/hide/remove, dashboard stats |
 | `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
@@ -148,7 +148,18 @@ Byte gambar **tidak pernah lewat server ini**. Alurnya:
 3. App `PUT` file ke `uploadUrl` dengan header persis seperti yang dikembalikan (tanpa `Authorization`).
 4. App mengirim `key` ke `POST /reports` (`photos`). Key berbentuk `public/<purpose>/<userId>/<id>.webp`; server menolak key milik user lain.
 
-Konfigurasi R2 (lihat `.env.example`): `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (tanpa nama bucket), `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (token R2 "Object Read & Write" khusus bucket ini). Agar foto bisa dibaca publik, aktifkan subdomain `r2.dev` (dev) atau custom domain (produksi) di bucket, lalu isi `S3_PUBLIC_BASE_URL`; nilainya dikirim ke app lewat `GET /api/v1/config` (`mediaBaseUrl`). Tanpa `S3_BUCKET`, endpoint upload menjawab 503 `SERVICE_UNAVAILABLE`. Catatan: presigned URL hanya berfungsi di domain `r2.cloudflarestorage.com`, bukan di custom domain. Belum ada pembersihan file yatim (foto yang di-upload tetapi tidak pernah dipakai laporan); atur lifecycle rule bucket jika perlu.
+Konfigurasi R2 (lihat `.env.example`): `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (tanpa nama bucket), `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (token R2 "Object Read & Write" khusus bucket ini). Agar foto bisa dibaca publik, aktifkan subdomain `r2.dev` (dev) atau custom domain (produksi) di bucket, lalu isi `S3_PUBLIC_BASE_URL`; nilainya dikirim ke app lewat `GET /api/v1/config` (`mediaBaseUrl`). Tanpa `S3_BUCKET`, endpoint upload menjawab 503 `SERVICE_UNAVAILABLE`. Catatan: presigned URL hanya berfungsi di domain `r2.cloudflarestorage.com`, bukan di custom domain. Foto laporan yang sudah expired/closed/removed dihapus oleh job harian (lihat "Housekeeping terjadwal"). Foto yatim (di-upload tetapi tidak pernah dipakai laporan) belum disapu oleh job; pasang lifecycle rule bucket (mis. hapus objek `public/` yang lebih tua dari 90 hari; aman karena expiry laporan maksimal 60 hari) sebagai pengaman.
+
+### Housekeeping terjadwal (Vercel Cron)
+
+`vercel.json` menjadwalkan `GET /api/v1/cron/housekeeping` tiap hari 03:00 UTC (Hobby plan hanya mengizinkan sekali sehari). Endpoint menolak (503) tanpa `CRON_SECRET`, dan 401 bila header `Authorization: Bearer <CRON_SECRET>` salah. Vercel mengirim header itu otomatis setelah `CRON_SECRET` diisi di Environment Variables project (buat dengan `openssl rand -hex 32`). Tiap task jalan terpisah; satu yang gagal tidak menghentikan lainnya, dan responsnya 500 supaya terlihat gagal di log Cron.
+
+| Task | Isi |
+| --- | --- |
+| `photos` | Hapus file foto (+ thumbnail `_t.webp`) laporan dan update-nya bila laporan expired lebih dari 3 hari, closed lebih dari 3 hari, atau removed; lalu kosongkan `photos` di database. File dihapus dulu: bila gagal, tidak ada yang dikosongkan dan run berikutnya mengulang. Maks 1000 laporan per run. |
+| `rate-limits` | Hapus baris `rate_limit_hits` yang lebih tua dari 1 hari (termasuk IP di key form support). |
+
+Uji manual: `curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/v1/cron/housekeeping`.
 
 ### Push notification (Firebase Cloud Messaging)
 

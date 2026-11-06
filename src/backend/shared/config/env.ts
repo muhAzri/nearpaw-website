@@ -39,6 +39,11 @@ const ServerEnvSchema = z.object({
   FIREBASE_SERVICE_ACCOUNT_JSON: blankAsUndefined(z.string().min(2).optional()),
   /** Optional: defaults to the `project_id` inside the service account JSON. */
   FIREBASE_PROJECT_ID: blankAsUndefined(z.string().min(2).optional()),
+  /**
+   * Shared secret for the scheduled housekeeping job (`GET /api/v1/cron/housekeeping`). Vercel Cron sends it as
+   * `Authorization: Bearer <CRON_SECRET>`. Unset = the job refuses to run. At least 16 characters.
+   */
+  CRON_SECRET: blankAsUndefined(z.string().min(16).optional()),
   // Add further server-only secrets here (e.g. SUPABASE_SECRET_KEY) and validate them.
 });
 

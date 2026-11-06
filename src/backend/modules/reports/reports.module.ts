@@ -4,7 +4,8 @@ import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { FlagService } from "./application/flag.usecases";
 import { ModerationService } from "./application/moderation.usecases";
-import type { ContributorDirectory, LimitsReader, RegionDirectory, ReportEvents } from "./application/ports";
+import { PhotoRetention } from "./application/photo-retention";
+import type { ContributorDirectory, LimitsReader, PhotoEraser, RegionDirectory, ReportEvents } from "./application/ports";
 import { ReportService } from "./application/report.usecases";
 import { ReportStats } from "./application/stats.usecases";
 import type { FlagRepository, ReportRepository, UpdateRepository } from "./domain/repositories";
@@ -18,6 +19,7 @@ export function createReportsModule(deps: {
   regions: RegionDirectory;
   limits: LimitsReader;
   events: ReportEvents;
+  photos: PhotoEraser;
   repos: { reports: ReportRepository; updates: UpdateRepository; flags: FlagRepository };
   clock?: Clock;
   /** Where `public/…` photo keys are served from (`S3_PUBLIC_BASE_URL`). */
@@ -30,6 +32,7 @@ export function createReportsModule(deps: {
   const stats = new ReportStats(reports, updates, flags, clock);
   return {
     stats,
+    photoRetention: new PhotoRetention(reports, updates, deps.photos),
     reportsController: new ReportsController(
       deps.auth,
       new ReportService(reports, updates, deps.contributors, deps.regions, deps.limits, deps.events, clock, mediaUrl),

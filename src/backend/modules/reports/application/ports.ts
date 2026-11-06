@@ -35,3 +35,8 @@ export interface PublishedReport {
 export interface ReportEvents {
   published(report: PublishedReport): Promise<void>;
 }
+
+/** Deletes stored photo files (implemented by the media module via the composition root). Missing files are not an error. */
+export interface PhotoEraser {
+  deleteObjects(keys: readonly string[]): Promise<void>;
+}
