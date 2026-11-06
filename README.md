@@ -114,10 +114,11 @@ Modul di `src/backend/modules` (dirakit di `src/backend/composition.ts`, satu-sa
 | `impact` | Periode + alokasi: draft → verified → published; total per mata uang, tidak pernah dijumlah lintas mata uang |
 | `alerts` | Pengaturan area/radius/hewan, feed, device token, fan-out saat laporan terbit |
 | `support` | Pesan support + privacy request publik (rate limit, honeypot), inbox admin (email dimasking) |
+| `media` | URL upload foto presigned (Cloudflare R2 / S3): app mengompres foto ke WebP di HP, lalu meng-upload langsung ke bucket |
 | `audit` | Log append-only + export CSV |
 | `admin` | Agregat dashboard |
 
-Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
+Endpoint publik/app: `/api/v1/{auth/{register,sign-in,forgot-password,resend-verification},config,regions,media/uploads,reports,reports/[ref],reports/[ref]/updates,reports/[ref]/block-reporter,public/reports/[ref],flags,me/**,impact/**,support,privacy-requests}`.
 Endpoint admin (`Bearer` token admin): `/api/v1/admin/**` (login, dashboard, reports, updates, flags, users, impact, regions, config, ad-placements, audit, support, privacy-requests).
 
 Auth: `Authorization: Bearer <token>`. Sign-in app memakai email + password lewat Supabase Auth (butuh `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; email konfirmasi dan reset dikirim Supabase). Tanpa keduanya di development, akun disimpan in-memory dan langsung terkonfirmasi. Token app tetap diterbitkan backend ini. Env: lihat `.env.example`.
@@ -125,9 +126,19 @@ Auth: `Authorization: Bearer <token>`. Sign-in app memakai email + password lewa
 ### Belum ada (sengaja)
 
 - **Persistensi**: semua repository masih in-memory di `infrastructure/` (hilang saat restart). Ganti dengan adapter Supabase di balik port `domain/repositories.ts` tanpa mengubah use case.
-- **Upload foto**: API menerima storage key `public/...` (EXIF sudah dibuang oleh pipeline media); pipeline + signed upload belum dibuat.
 - **Push (APNs) dan email**: `PushNotifier` / `Mailer` masih placeholder yang melaporkan "tidak terkirim".
 - **Captcha** form web (`support`, `privacy-requests`): hanya honeypot + rate limit.
+
+### Upload foto (presigned URL, Cloudflare R2 / S3)
+
+Byte gambar **tidak pernah lewat server ini**. Alurnya:
+
+1. App mengecilkan foto (maks 1600 px, orientasi EXIF diterapkan, metadata/GPS dibuang) dan mengompresnya ke **WebP di HP** (libwebp), jadi server tidak perlu memproses gambar.
+2. `POST /api/v1/media/uploads` `{ purpose: "report" | "update", files: [{ contentType: "image/webp", sizeBytes }] }` (user login, rate limit 20 request/jam) → `{ uploads: [{ key, uploadUrl, method: "PUT", headers, expiresAt }] }`. URL berlaku 5 menit dan **menandatangani** `Content-Type`, `Content-Length` (ukuran persis) dan `Cache-Control`, sehingga bucket menolak file dengan tipe/ukuran lain. Maks 4 file/request, 2 MB/file.
+3. App `PUT` file ke `uploadUrl` dengan header persis seperti yang dikembalikan (tanpa `Authorization`).
+4. App mengirim `key` ke `POST /reports` (`photos`). Key berbentuk `public/<purpose>/<userId>/<id>.webp`; server menolak key milik user lain.
+
+Konfigurasi R2 (lihat `.env.example`): `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (tanpa nama bucket), `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (token R2 "Object Read & Write" khusus bucket ini). Agar foto bisa dibaca publik, aktifkan subdomain `r2.dev` (dev) atau custom domain (produksi) di bucket, lalu isi `S3_PUBLIC_BASE_URL`; nilainya dikirim ke app lewat `GET /api/v1/config` (`mediaBaseUrl`). Tanpa `S3_BUCKET`, endpoint upload menjawab 503 `SERVICE_UNAVAILABLE`. Catatan: presigned URL hanya berfungsi di domain `r2.cloudflarestorage.com`, bukan di custom domain. Belum ada pembersihan file yatim (foto yang di-upload tetapi tidak pernah dipakai laporan); atur lifecycle rule bucket jika perlu.
 
 ### Database (Supabase)
 
