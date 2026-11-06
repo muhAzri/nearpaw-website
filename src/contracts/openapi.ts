@@ -19,6 +19,8 @@ const ops: Op[] = [
   // ---- App: auth & account ----
   { method: "post", path: "/auth/register", tag: "Auth", summary: "Create an account with email + password; Supabase emails a confirmation link", body: C.RegisterSchema, status: 201 },
   { method: "post", path: "/auth/sign-in", tag: "Auth", summary: "Sign in with email + password (403 EMAIL_NOT_VERIFIED until the link is opened)", body: C.SignInSchema },
+  { method: "post", path: "/auth/refresh", tag: "Auth", summary: "Exchange a refresh token for a new access + refresh token (rotation; a reused token ends the session)", body: C.RefreshSchema },
+  { method: "post", path: "/auth/sign-out", tag: "Auth", summary: "Revoke the session behind a refresh token (always 204)", body: C.RefreshSchema, status: 204 },
   { method: "post", path: "/auth/forgot-password", tag: "Auth", summary: "Email a password reset link (same response whether or not the account exists)", body: C.EmailOnlySchema },
   { method: "post", path: "/auth/resend-verification", tag: "Auth", summary: "Resend the confirmation email", body: C.EmailOnlySchema },
   { method: "get", path: "/me", tag: "Account", summary: "Current profile", auth: "user" },

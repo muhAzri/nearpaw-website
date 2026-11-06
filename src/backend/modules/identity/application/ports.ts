@@ -1,5 +1,7 @@
 import type { Principal } from "@/backend/shared/domain/principal";
 import type { LoginState } from "../domain/login-policy";
+import type { User } from "../domain/user";
+import type { SessionDto } from "./session-dto";
 
 export interface AuthIdentity {
   /** Id of the account in the auth provider; also the id of our `users` row. */
@@ -47,4 +49,20 @@ export interface UserActivityReader {
 export interface AccountDataCleaner {
   handleReports(userId: string, mode: "keep_anonymous" | "delete"): Promise<void>;
   removeAlertData(userId: string): Promise<void>;
+}
+
+/** Generates and hashes refresh tokens (random bytes + SHA-256; infrastructure because it needs a crypto library). */
+export interface RefreshTokenCodec {
+  generate(): { token: string; hash: string };
+  hash(token: string): string;
+}
+
+/** Begins a session for a freshly authenticated user. */
+export interface SessionStarter {
+  start(user: User): Promise<SessionDto>;
+}
+
+/** Ends every session of an account (account deletion). */
+export interface SessionRevoker {
+  revokeAll(userId: string): Promise<void>;
 }

@@ -8,10 +8,13 @@ import { singleton } from "@/backend/shared/infrastructure/singleton";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
 import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
+import { EndSession, RefreshSession, SessionIssuer } from "./application/session.usecases";
 import type { AccountDataCleaner, UserActivityReader } from "./application/ports";
 import { DevAuthProvider } from "./infrastructure/dev-auth.provider";
 import { InMemoryLoginAttempts } from "./infrastructure/in-memory-login-attempts";
 import { HmacTokenService } from "./infrastructure/hmac-token.service";
+import { InMemoryRefreshTokenRepository } from "./infrastructure/in-memory-refresh-tokens";
+import { CryptoRefreshTokenCodec } from "./infrastructure/refresh-token-codec";
 import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
 import { IdentityController } from "./presentation/identity.controller";
@@ -27,6 +30,8 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   const users = singleton("users_repo", () => new InMemoryUserRepository());
   const blocks = singleton("blocks_repo", () => new InMemoryBlockRepository());
   const attempts = singleton("login_attempts", () => new InMemoryLoginAttempts());
+  const refreshTokens = singleton("refresh_tokens_repo", () => new InMemoryRefreshTokenRepository());
+  const codec = new CryptoRefreshTokenCodec();
   const tokens = singleton("token_service", () =>
     env.AUTH_SECRET ? new HmacTokenService(env.AUTH_SECRET) : HmacTokenService.withEphemeralSecret(),
   );
@@ -43,6 +48,7 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   });
 
   const queries = new UserQueries(users, blocks, clock);
+  const sessions = new SessionIssuer(tokens, refreshTokens, codec, clock);
 
   /** Banned/deleted accounts lose access immediately, even with an unexpired token. */
   const authenticator: Authenticator = {
@@ -67,12 +73,14 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
     return new IdentityController(
       authenticator,
       new Register(credentials, limiter),
-      new SignInWithPassword(passwords, tokens),
+      new SignInWithPassword(passwords, sessions),
       new RequestPasswordReset(credentials, limiter),
       new ResendVerification(credentials, limiter),
       new AdminLogin(passwords, tokens, deps.audit),
-      new AccountService(users, blocks, late.cleaner, clock),
+      new AccountService(users, blocks, late.cleaner, clock, sessions),
       new UserAdmin(users, blocks, late.activity, deps.audit),
+      new RefreshSession(sessions, refreshTokens, users, codec, limiter, clock),
+      new EndSession(refreshTokens, codec, clock),
     );
   }
 

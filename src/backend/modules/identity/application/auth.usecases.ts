@@ -7,26 +7,12 @@ import { afterFailure, isLocked } from "../domain/login-policy";
 import { assertAcceptablePassword } from "../domain/password-policy";
 import { DEFAULT_DISPLAY_NAME, type User } from "../domain/user";
 import type { UserRepository } from "../domain/repositories";
-import { AuthProviderError, type CredentialAuthProvider, type LoginAttemptStore, type TokenService } from "./ports";
+import { AuthProviderError, type CredentialAuthProvider, type LoginAttemptStore, type SessionStarter, type TokenService } from "./ports";
+import { toProfile, type SessionDto } from "./session-dto";
 
-export const USER_TOKEN_TTL = 30 * 24 * 3600;
 export const ADMIN_TOKEN_TTL = 8 * 3600;
 
-export interface SessionDto {
-  token: string;
-  expiresInSeconds: number;
-  role: "user" | "admin";
-  user?: ReturnType<typeof toProfile>;
-}
-
-export const toProfile = (u: User) => ({
-  id: u.id,
-  displayName: u.displayName,
-  signInMethod: "email" as const,
-  email: u.email,
-  status: u.status,
-  createdAt: u.createdAt.toISOString(),
-});
+export { toProfile, type SessionDto };
 
 /** Same wording whether or not the address exists, so the endpoints can't be used to probe for accounts. */
 const GENERIC_RATE_LIMIT = "Too many requests. Please try again later.";
@@ -133,21 +119,15 @@ export class PasswordAuthenticator {
   }
 }
 
-/** Sign in (S03). Issues the app token. */
+/** Sign in (S03). Starts a session: a short-lived access token plus a refresh token. */
 export class SignInWithPassword {
   constructor(
     private readonly authenticator: PasswordAuthenticator,
-    private readonly tokens: TokenService,
+    private readonly sessions: SessionStarter,
   ) {}
 
   async execute(input: { email: string; password: string }): Promise<SessionDto> {
-    const user = await this.authenticator.authenticate("user", input.email, input.password);
-    return {
-      token: this.tokens.issue({ id: user.id, role: "user" }, USER_TOKEN_TTL),
-      expiresInSeconds: USER_TOKEN_TTL,
-      role: "user",
-      user: toProfile(user),
-    };
+    return this.sessions.start(await this.authenticator.authenticate("user", input.email, input.password));
   }
 }
 

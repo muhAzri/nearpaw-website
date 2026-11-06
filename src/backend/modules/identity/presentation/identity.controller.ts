@@ -3,6 +3,7 @@ import {
   AdminUsersQuerySchema,
   DeleteAccountSchema,
   EmailOnlySchema,
+  RefreshSchema,
   RegisterSchema,
   SignInSchema,
   UpdateProfileSchema,
@@ -13,6 +14,7 @@ import { requireAdmin, requireUser, type Authenticator } from "@/backend/shared/
 import { created, noContent, ok, parseJson, parseQuery } from "@/backend/shared/presentation/http";
 import type { AccountService, UserAdmin } from "../application/account.usecases";
 import type { AdminLogin, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "../application/auth.usecases";
+import type { EndSession, RefreshSession } from "../application/session.usecases";
 
 export class IdentityController {
   constructor(
@@ -24,6 +26,8 @@ export class IdentityController {
     private readonly adminLogin: AdminLogin,
     private readonly account: AccountService,
     private readonly userAdmin: UserAdmin,
+    private readonly refreshSession: RefreshSession,
+    private readonly endSession: EndSession,
   ) {}
 
   register = async (request: Request) => {
@@ -32,6 +36,15 @@ export class IdentityController {
   };
 
   signIn = async (request: Request) => ok(await this.signInUser.execute(await parseJson(request, SignInSchema)));
+
+  /** Exchange a refresh token for a new access + refresh pair. The old refresh token stops working. */
+  refresh = async (request: Request) => ok(await this.refreshSession.execute((await parseJson(request, RefreshSchema)).refreshToken));
+
+  /** Sign out: revokes the whole token family so the refresh token can't be used again. Always 204. */
+  signOut = async (request: Request) => {
+    await this.endSession.execute((await parseJson(request, RefreshSchema)).refreshToken);
+    return noContent();
+  };
 
   forgotPassword = async (request: Request) =>
     ok(await this.passwordReset.execute(await parseJson(request, EmailOnlySchema)));
