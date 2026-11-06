@@ -39,7 +39,11 @@ export function LegalDocument({ copy }: { copy: LegalCopy }) {
                 <SectionHeading id={s.id} className="scroll-mt-4">
                   {s.number}. {s.title}
                 </SectionHeading>
-                <p className="mt-1 text-p1">{s.body}</p>
+                {s.body.split("\n\n").map((paragraph, n) => (
+                  <p key={n} className="mt-1 text-p1 [&:not(:first-of-type)]:mt-3">
+                    {paragraph}
+                  </p>
+                ))}
               </section>
             ))}
             {copy.questions && (
