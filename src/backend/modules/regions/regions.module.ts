@@ -10,12 +10,12 @@ import {
 } from "./infrastructure/in-memory.repositories";
 import { RegionsController } from "./presentation/regions.controller";
 
-export function createRegionsModule(deps: { auth: Authenticator; audit: AuditRecorder; clock?: Clock }) {
+export function createRegionsModule(deps: { auth: Authenticator; audit: AuditRecorder; clock?: Clock; mediaBaseUrl?: string }) {
   const regionRepo = singleton("regions_repo", () => new InMemoryRegionRepository());
   const configRepo = singleton("config_repo", () => new InMemoryConfigRepository());
   const placementRepo = singleton("placements_repo", () => new InMemoryAdPlacementRepository());
 
-  const queries = new RegionQueries(regionRepo, configRepo, placementRepo);
+  const queries = new RegionQueries(regionRepo, configRepo, placementRepo, deps.mediaBaseUrl?.replace(/\/+$/, "") ?? null);
   return {
     /** Read-side port consumed by other modules. */
     queries,

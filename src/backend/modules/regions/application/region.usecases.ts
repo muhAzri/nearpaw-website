@@ -158,6 +158,8 @@ export class RegionQueries {
     private readonly regions: RegionRepository,
     private readonly config: ConfigRepository,
     private readonly placements: AdPlacementRepository,
+    /** Where `public/…` photo keys are served from; null until storage is configured. */
+    private readonly mediaBaseUrl: string | null = null,
   ) {}
 
   async findActiveContaining(point: { lat: number; lng: number }) {
@@ -196,6 +198,7 @@ export class RegionQueries {
       minimumAppVersion: config.safetyLimits.minimumAppVersion,
       featureFlags: config.featureFlags,
       regions: await this.activeRegions(),
+      mediaBaseUrl: this.mediaBaseUrl,
       ads,
     };
   }
