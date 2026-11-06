@@ -1,6 +1,7 @@
 import type { AuditRecorder } from "@/backend/shared/application/audit";
 import type { Clock } from "@/backend/shared/application/clock";
 import { ConflictError, NotFoundError, ValidationError } from "@/backend/shared/domain/errors";
+import type { MediaUrl } from "@/backend/shared/domain/media-key";
 import { distanceKm } from "@/backend/shared/domain/geo";
 import { actorOf, type Principal } from "@/backend/shared/domain/principal";
 import { hideUpdate, restoreUpdate } from "../domain/community-update";
@@ -20,6 +21,7 @@ export class ModerationService {
     private readonly contributors: ContributorDirectory,
     private readonly audit: AuditRecorder,
     private readonly clock: Clock,
+    private readonly mediaUrl: MediaUrl,
   ) {}
 
   // ---------------- reports ----------------
@@ -100,6 +102,7 @@ export class ModerationService {
       liveForMinutes: Math.max(0, Math.floor((now.getTime() - report.createdAt.getTime()) / 60_000)),
       media: report.photos.map((publicKey) => ({
         publicKey,
+        publicUrl: this.mediaUrl(publicKey),
         originalKey: publicKey.replace(/^public\//, "original/"),
         note: { original: "EXIF present (restricted)", public: "EXIF stripped (public)" },
       })),

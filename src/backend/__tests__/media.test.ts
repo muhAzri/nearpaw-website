@@ -4,7 +4,7 @@ import { MediaUploads, UPLOAD_REQUESTS_PER_HOUR, type ObjectStorage } from "../m
 import { S3ObjectStorage } from "../modules/media/infrastructure/s3-object-storage";
 import { InMemoryRateLimiter } from "./support/in-memory-rate-limiter";
 import { ForbiddenError, RateLimitedError, ServiceUnavailableError, ValidationError } from "@/backend/shared/domain/errors";
-import { MAX_FILES_PER_REQUEST, MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, isOwnedMediaKey, isThumbnailKey, mediaKey, thumbnailKey } from "@/backend/shared/domain/media-key";
+import { MAX_FILES_PER_REQUEST, MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, isOwnedMediaKey, isThumbnailKey, mediaKey, mediaUrlFor, thumbnailKey } from "@/backend/shared/domain/media-key";
 
 const user = { id: "u_maya42", role: "user" as const };
 const now = new Date("2026-11-06T10:00:00Z");
@@ -28,6 +28,7 @@ const build = (over: { allow?: boolean; storage?: ObjectStorage } = {}) => {
     new InMemoryRateLimiter(),
     { now: () => now },
     () => `id${++n}`,
+    mediaUrlFor("https://files.example.test/"),
   );
 };
 
@@ -86,6 +87,12 @@ describe("MediaUploads", () => {
     expect(storage.calls).toHaveLength(3); // photo + thumbnail, then the second photo
     // files are presigned concurrently, so look the call up by key rather than by position
     expect((storage.calls as { key: string }[]).find((c) => c.key === "public/report/u_maya42/id1_t.webp")).toMatchObject({ contentLength: 20_000, contentType: "image/webp", expiresInSeconds: 300 });
+  });
+
+  it("returns the absolute URL each uploaded photo and thumbnail will be served from", async () => {
+    const { uploads } = await build().createUploadUrls(user, { purpose: "report", files: [{ ...webp(), thumbnailSizeBytes: 20_000 }] });
+    expect(uploads[0].url).toBe("https://files.example.test/public/report/u_maya42/id1.webp");
+    expect(uploads[0].thumbnail?.url).toBe("https://files.example.test/public/report/u_maya42/id1_t.webp");
   });
 
   it("rejects an oversized thumbnail before signing anything", async () => {
@@ -158,5 +165,15 @@ describe("S3ObjectStorage", () => {
     });
     await expect(storage.presignUpload({ key: "public/report/u_maya42/id1.webp", contentType: "image/webp", contentLength: 1000, expiresInSeconds: 300 }))
       .rejects.toBeInstanceOf(ServiceUnavailableError);
+  });
+});
+
+describe("mediaUrlFor", () => {
+  it("builds absolute URLs from the configured base, ignoring stray slashes", () => {
+    expect(mediaUrlFor("https://files.example.test/")("public/report/u/a.webp")).toBe("https://files.example.test/public/report/u/a.webp");
+    expect(mediaUrlFor("https://files.example.test")("/public/report/u/a.webp")).toBe("https://files.example.test/public/report/u/a.webp");
+  });
+  it("leaves the key untouched when storage has no public base", () => {
+    expect(mediaUrlFor(undefined)("public/report/u/a.webp")).toBe("public/report/u/a.webp");
   });
 });

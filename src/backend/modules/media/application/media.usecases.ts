@@ -9,6 +9,8 @@ import {
   MEDIA_CONTENT_TYPE,
   mediaKey,
   thumbnailKey,
+  mediaUrlFor,
+  type MediaUrl,
   type MediaPurpose,
 } from "@/backend/shared/domain/media-key";
 import type { Principal } from "@/backend/shared/domain/principal";
@@ -39,11 +41,13 @@ export const UPLOAD_REQUESTS_PER_HOUR = 20;
 /** One signed upload: the photo, and (when the app declared one) its thumbnail. */
 export interface SignedUpload {
   key: string;
+  /** Absolute URL the photo will be served from once uploaded. */
+  url: string;
   uploadUrl: string;
   method: "PUT";
   headers: Record<string, string>;
   expiresAt: string;
-  thumbnail?: { key: string; uploadUrl: string; method: "PUT"; headers: Record<string, string>; expiresAt: string };
+  thumbnail?: { key: string; url: string; uploadUrl: string; method: "PUT"; headers: Record<string, string>; expiresAt: string };
 }
 
 export interface UploadRequest {
@@ -58,6 +62,7 @@ export class MediaUploads {
     private readonly limiter: RateLimiter,
     private readonly clock: Clock,
     private readonly newId: () => string = () => crypto.randomUUID().replaceAll("-", ""),
+    private readonly mediaUrl: MediaUrl = mediaUrlFor(null),
   ) {}
 
   async createUploadUrls(user: Principal, request: UploadRequest): Promise<{ uploads: SignedUpload[] }> {
@@ -91,7 +96,7 @@ export class MediaUploads {
           contentLength: file.sizeBytes,
           expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
         });
-        const upload = { key, uploadUrl: signed.url, method: signed.method, headers: signed.headers, expiresAt };
+        const upload = { key, url: this.mediaUrl(key), uploadUrl: signed.url, method: signed.method, headers: signed.headers, expiresAt };
         if (file.thumbnailSizeBytes === undefined) return upload;
         const thumb = await this.storage.presignUpload({
           key: thumbnailKey(key),
@@ -99,7 +104,7 @@ export class MediaUploads {
           contentLength: file.thumbnailSizeBytes,
           expiresInSeconds: UPLOAD_URL_TTL_SECONDS,
         });
-        return { ...upload, thumbnail: { key: thumbnailKey(key), uploadUrl: thumb.url, method: thumb.method, headers: thumb.headers, expiresAt } };
+        return { ...upload, thumbnail: { key: thumbnailKey(key), url: this.mediaUrl(thumbnailKey(key)), uploadUrl: thumb.url, method: thumb.method, headers: thumb.headers, expiresAt } };
       }),
     );
     return { uploads };

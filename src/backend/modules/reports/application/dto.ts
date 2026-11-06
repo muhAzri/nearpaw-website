@@ -1,9 +1,9 @@
-import { thumbnailKey } from "@/backend/shared/domain/media-key";
+import { thumbnailKey, type MediaUrl } from "@/backend/shared/domain/media-key";
 import { distanceKm, type GeoPoint } from "@/backend/shared/domain/geo";
 import type { CommunityUpdate } from "../domain/community-update";
 import { effectiveState, reportTitle, type Report } from "../domain/report";
 
-export function toSummary(report: Report, now: Date, opts: { from?: GeoPoint; updateCount?: number; mine?: boolean }) {
+export function toSummary(report: Report, now: Date, opts: { mediaUrl: MediaUrl; from?: GeoPoint; updateCount?: number; mine?: boolean }) {
   return {
     ref: report.ref,
     title: reportTitle(report),
@@ -15,18 +15,18 @@ export function toSummary(report: Report, now: Date, opts: { from?: GeoPoint; up
     locationLabel: report.locationLabel,
     region: report.areaName,
     distanceKm: opts.from ? Math.round(distanceKm(opts.from, report.location) * 100) / 100 : null,
-    thumbnail: report.photos[0] ? thumbnailKey(report.photos[0]) : null,
+    thumbnail: report.photos[0] ? opts.mediaUrl(thumbnailKey(report.photos[0])) : null,
     updateCount: opts.updateCount ?? 0,
     mine: opts.mine ?? false,
     createdAt: report.createdAt.toISOString(),
   };
 }
 
-export const toUpdateDto = (u: CommunityUpdate) => ({
+export const toUpdateDto = (u: CommunityUpdate, mediaUrl: MediaUrl) => ({
   id: u.id,
   type: u.type,
   note: u.note,
-  photos: u.photos,
+  photos: u.photos.map(mediaUrl),
   label: "Community update" as const,
   verified: false,
   createdAt: u.createdAt.toISOString(),

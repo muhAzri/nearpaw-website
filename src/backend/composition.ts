@@ -47,7 +47,7 @@ function compose(overrides: BackendOverrides = {}) {
   const regions = createRegionsModule({ auth, audit: audit.recorder, repos: { regions: storage.regions, config: storage.config, placements: storage.placements }, mediaBaseUrl: serverEnv().S3_PUBLIC_BASE_URL });
 
   // Restricted or suspended accounts can't upload photos either.
-  const media = createMediaModule({ auth, limiter: storage.rateLimiter, policy: { assertCanUpload: (userId) => identity.queries.assertCanContribute(userId) } });
+  const media = createMediaModule({ auth, mediaBaseUrl: serverEnv().S3_PUBLIC_BASE_URL, limiter: storage.rateLimiter, policy: { assertCanUpload: (userId) => identity.queries.assertCanContribute(userId) } });
 
   const alerts = createAlertsModule({
     auth,
@@ -65,6 +65,7 @@ function compose(overrides: BackendOverrides = {}) {
     contributors: identity.queries,
     regions: regions.queries,
     limits: regions.queries,
+    mediaBaseUrl: serverEnv().S3_PUBLIC_BASE_URL,
     // Alerts must never make publishing a report fail.
     events: {
       published: (report) =>

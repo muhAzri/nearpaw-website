@@ -51,3 +51,15 @@ export function assertOwnedMedia(userId: string, keys: readonly string[]): void 
     throw new ValidationError("One of the photos wasn't uploaded by you. Add it again.", { field: "photos" });
   }
 }
+
+/** Turns a storage key into the absolute URL clients load. Clients never build media URLs themselves. */
+export type MediaUrl = (key: string) => string;
+
+/**
+ * `baseUrl` is where `public/…` keys are served from (`S3_PUBLIC_BASE_URL`). With no base configured (storage disabled) the key
+ * is returned untouched, so no response ever points at a made-up host.
+ */
+export function mediaUrlFor(baseUrl: string | null | undefined): MediaUrl {
+  const base = baseUrl?.replace(/\/+$/, "");
+  return (key) => (base ? `${base}/${key.replace(/^\/+/, "")}` : key);
+}

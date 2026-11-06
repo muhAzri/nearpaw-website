@@ -153,8 +153,8 @@ describe("nearpaw backend", () => {
     const ref = created.json.data.ref as string;
     const list = await call("GET", "reports", { query: "?lat=-6.2615&lng=106.8106" });
     const row = (list.json.data.items as { ref: string; thumbnail: string }[]).find((r) => r.ref === ref);
-    expect(row?.thumbnail).toBe(`public/report/${me}/abc123_t.webp`);
-    expect((await call("GET", `reports/${ref}`)).json.data.photos).toEqual([full]);
+    expect(row?.thumbnail).toBe(`https://files.example.test/public/report/${me}/abc123_t.webp`);
+    expect((await call("GET", `reports/${ref}`)).json.data.photos).toEqual([`https://files.example.test/${full}`]);
     // asking for upload URLs with a thumbnail is part of the public contract
     const bad = await call("POST", "media/uploads", { token, body: { purpose: "report", files: [{ contentType: "image/webp", sizeBytes: 1000, thumbnailSizeBytes: 999_999 }] } });
     expect(bad.status).toBe(422);

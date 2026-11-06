@@ -1,3 +1,4 @@
+import { mediaUrlFor } from "@/backend/shared/domain/media-key";
 import { systemClock, type Clock } from "@/backend/shared/application/clock";
 import { serverEnv } from "@/backend/shared/config/env";
 import type { RateLimiter } from "@/backend/shared/application/rate-limiter";
@@ -20,7 +21,7 @@ function storageFromEnv(): ObjectStorage {
   });
 }
 
-export function createMediaModule(deps: { auth: Authenticator; policy: UploadPolicy; limiter: RateLimiter; storage?: ObjectStorage; clock?: Clock }) {
-  const uploads = new MediaUploads(deps.storage ?? storageFromEnv(), deps.policy, deps.limiter, deps.clock ?? systemClock);
+export function createMediaModule(deps: { auth: Authenticator; policy: UploadPolicy; limiter: RateLimiter; storage?: ObjectStorage; clock?: Clock; mediaBaseUrl?: string }) {
+  const uploads = new MediaUploads(deps.storage ?? storageFromEnv(), deps.policy, deps.limiter, deps.clock ?? systemClock, undefined, mediaUrlFor(deps.mediaBaseUrl));
   return { uploads, controller: new MediaController(deps.auth, uploads) };
 }

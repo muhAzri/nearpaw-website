@@ -1,4 +1,4 @@
-import { assertOwnedMedia } from "@/backend/shared/domain/media-key";
+import { assertOwnedMedia, type MediaUrl } from "@/backend/shared/domain/media-key";
 import type { Clock } from "@/backend/shared/application/clock";
 import { HOUR_MS } from "@/backend/shared/application/clock";
 import { ForbiddenError, NotFoundError, RateLimitedError, ValidationError } from "@/backend/shared/domain/errors";
@@ -54,6 +54,8 @@ export class ReportService {
     private readonly limits: LimitsReader,
     private readonly events: ReportEvents,
     private readonly clock: Clock,
+    /** Every photo in a response goes out as an absolute URL; the app renders it as-is. */
+    private readonly mediaUrl: MediaUrl,
   ) {}
 
   async create(user: Principal, cmd: CreateReportCommand) {
@@ -109,6 +111,7 @@ export class ReportService {
     const items = await Promise.all(
       page.items.map(async (r) =>
         toSummary(r, now, {
+          mediaUrl: this.mediaUrl,
           from: cmd.center,
           mine: viewer?.id === r.reporterId,
           updateCount: (await this.updates.listByReport(r.id)).filter((u) => u.state === "live").length,
@@ -139,12 +142,12 @@ export class ReportService {
       : [];
     const mine = viewer?.id === report.reporterId;
     return {
-      ...toSummary(report, now, { from, mine, updateCount: updates.length }),
+      ...toSummary(report, now, { mediaUrl: this.mediaUrl, from, mine, updateCount: updates.length }),
       description: report.description,
-      photos: report.photos,
+      photos: report.photos.map(this.mediaUrl),
       expiresAt: report.expiresAt.toISOString(),
       urgencyNote: "Urgency is the reporter's own assessment.",
-      updates: updates.map(toUpdateDto),
+      updates: updates.map((u) => toUpdateDto(u, this.mediaUrl)),
       canAddUpdate: communityUpdates && effectiveState(report, now) === "live",
     };
   }
@@ -170,7 +173,7 @@ export class ReportService {
     const own = (await this.reports.listByReporter(user.id)).filter((r) => r.state !== "removed");
     return own
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((r) => toSummary(r, now, { mine: true }));
+      .map((r) => toSummary(r, now, { mediaUrl: this.mediaUrl, mine: true }));
   }
 
   private async owned(user: Principal, ref: string): Promise<Report> {
@@ -187,9 +190,9 @@ export class ReportService {
     for (const u of updates) history.push({ label: "Community update (not verified)", at: u.createdAt.toISOString() });
     if (report.closedAt) history.push({ label: "Closed by you", at: report.closedAt.toISOString() });
     return {
-      ...toSummary(report, now, { mine: true, updateCount: updates.length }),
+      ...toSummary(report, now, { mediaUrl: this.mediaUrl, mine: true, updateCount: updates.length }),
       description: report.description,
-      photos: report.photos,
+      photos: report.photos.map(this.mediaUrl),
       expiresAt: report.expiresAt.toISOString(),
       moderation: report.state === "hidden" ? { hidden: true, by: report.hiddenBy === "auto" ? "community flags" : "moderators" } : { hidden: false },
       history,
@@ -223,7 +226,7 @@ export class ReportService {
     }
     const update = createUpdate(report, { ...input, authorId: user.id, now });
     await this.updates.add(update);
-    return toUpdateDto(update);
+    return toUpdateDto(update, this.mediaUrl);
   }
 
   async myUpdates(user: Principal) {
@@ -232,7 +235,7 @@ export class ReportService {
       updates.map(async (u) => {
         const report = await this.reports.findById(u.reportId);
         return {
-          ...toUpdateDto(u),
+          ...toUpdateDto(u, this.mediaUrl),
           status: u.state === "live" ? ("posted" as const) : ("hidden" as const),
           report: report ? { ref: report.ref, title: reportTitle(report), locationLabel: report.locationLabel } : null,
         };
