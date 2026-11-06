@@ -1,5 +1,5 @@
 import type { Page } from "@/backend/shared/domain/page";
-import type { AuditCriteria, AuditRecord, AuditRepository } from "../domain/audit-record";
+import type { AuditCriteria, AuditRecord, AuditRepository } from "../../modules/audit/domain/audit-record";
 
 export class InMemoryAuditRepository implements AuditRepository {
   private readonly records: AuditRecord[] = [];

@@ -1,15 +1,15 @@
 import type { Page } from "@/backend/shared/domain/page";
 import { distanceKm } from "@/backend/shared/domain/geo";
-import type { CommunityUpdate } from "../domain/community-update";
-import type { Flag, FlagTarget } from "../domain/flag";
-import { effectiveState, URGENCY_RANK, type Report } from "../domain/report";
+import type { CommunityUpdate } from "../../modules/reports/domain/community-update";
+import type { Flag, FlagTarget } from "../../modules/reports/domain/flag";
+import { effectiveState, URGENCY_RANK, type Report } from "../../modules/reports/domain/report";
 import type {
   FlagRepository,
   ReportQuery,
   ReportRepository,
   UpdateRepository,
   UpdateSearch,
-} from "../domain/repositories";
+} from "../../modules/reports/domain/repositories";
 
 const page = <T>(items: T[], offset: number, limit: number): Page<T> => ({
   items: items.slice(offset, offset + limit),

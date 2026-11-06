@@ -1,10 +1,10 @@
 import { SignJWT } from "jose";
-import { AuthProviderError, type AuthIdentity, type CredentialAuthProvider, type ProviderSession } from "../application/ports";
-import { JwtAccessTokenVerifier } from "./jwt-access-token.verifier";
+import { AuthProviderError, type AuthIdentity, type CredentialAuthProvider, type ProviderSession } from "../../modules/identity/application/ports";
+import { JwtAccessTokenVerifier } from "../../modules/identity/infrastructure/jwt-access-token.verifier";
 
-const ISSUER = "nearpaw-dev";
+const ISSUER = "nearpaw-test";
 const AUDIENCE = "authenticated";
-export const DEV_ACCESS_TOKEN_TTL_SECONDS = 3600;
+export const FAKE_ACCESS_TOKEN_TTL_SECONDS = 3600;
 
 interface DevAccount {
   id: string;
@@ -13,11 +13,11 @@ interface DevAccount {
 }
 
 /**
- * Development and tests only: accounts live in memory so the flows work without a Supabase project.
+ * Tests only: accounts live in memory so the flows run without a Supabase project.
  * With `autoConfirm` the account is usable immediately (there is no inbox to click); tests turn it off
  * and call `confirm` to act as the emailed link.
  */
-export class DevAuthProvider implements CredentialAuthProvider {
+export class FakeAuthProvider implements CredentialAuthProvider {
   private readonly accounts = new Map<string, DevAccount>();
   readonly outbox: { kind: "confirm" | "reset"; email: string }[] = [];
   /** Single-use refresh tokens, like the real provider's. Only lives as long as this process. */
@@ -42,11 +42,11 @@ export class DevAuthProvider implements CredentialAuthProvider {
       .setIssuer(ISSUER)
       .setAudience(AUDIENCE)
       .setIssuedAt(iat)
-      .setExpirationTime(iat + DEV_ACCESS_TOKEN_TTL_SECONDS)
+      .setExpirationTime(iat + FAKE_ACCESS_TOKEN_TTL_SECONDS)
       .sign(this.secret);
     const refreshToken = `dev${crypto.randomUUID().replaceAll("-", "")}`;
     this.refreshTokens.set(refreshToken, { userId, email });
-    return { userId, accessToken, refreshToken, expiresInSeconds: DEV_ACCESS_TOKEN_TTL_SECONDS };
+    return { userId, accessToken, refreshToken, expiresInSeconds: FAKE_ACCESS_TOKEN_TTL_SECONDS };
   }
 
   confirm(email: string) {

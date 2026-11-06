@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { RateLimitedError, UnauthorizedError } from "@/backend/shared/domain/errors";
-import { InMemoryRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
+import { InMemoryRateLimiter } from "./support/in-memory-rate-limiter";
 import { ProfileProvisioner } from "../modules/identity/application/profile-provisioner";
 import { EndSession, RefreshSession, REFRESH_TTL_SECONDS, SessionIssuer } from "../modules/identity/application/session.usecases";
 import type { User } from "../modules/identity/domain/user";
-import { DEV_ACCESS_TOKEN_TTL_SECONDS, DevAuthProvider } from "../modules/identity/infrastructure/dev-auth.provider";
-import { InMemoryUserRepository } from "../modules/identity/infrastructure/in-memory.repositories";
+import { FAKE_ACCESS_TOKEN_TTL_SECONDS, FakeAuthProvider } from "./support/fake-auth-provider";
+import { InMemoryUserRepository } from "./support/in-memory-identity";
 
 const EMAIL = "rina.wijaya91@gmail.com";
 const PASSWORD = "paws4life26";
 
 let now: number;
-let provider: DevAuthProvider;
+let provider: FakeAuthProvider;
 let users: InMemoryUserRepository;
 let profiles: ProfileProvisioner;
 let issuer: SessionIssuer;
@@ -28,7 +28,7 @@ async function signIn() {
 beforeEach(async () => {
   now = Date.parse("2026-11-06T10:00:00Z");
   const clock = { now: () => new Date(now) };
-  provider = new DevAuthProvider(true, clock.now);
+  provider = new FakeAuthProvider(true, clock.now);
   await provider.signUp(EMAIL, PASSWORD);
   users = new InMemoryUserRepository();
   profiles = new ProfileProvisioner(users, clock, undefined);
@@ -40,7 +40,7 @@ beforeEach(async () => {
 describe("starting a session", () => {
   it("hands out the provider's JWT access token and a refresh token", async () => {
     const { user, dto } = await signIn();
-    expect(dto.expiresInSeconds).toBe(DEV_ACCESS_TOKEN_TTL_SECONDS);
+    expect(dto.expiresInSeconds).toBe(FAKE_ACCESS_TOKEN_TTL_SECONDS);
     expect(dto.refreshExpiresInSeconds).toBe(REFRESH_TTL_SECONDS);
     expect(dto.token.split(".")).toHaveLength(3);
     expect(await provider.verifier.verify(dto.token)).toEqual({ sub: user.id, email: EMAIL });
@@ -49,12 +49,12 @@ describe("starting a session", () => {
 
   it("access tokens really do expire after an hour", async () => {
     const { dto } = await signIn();
-    advance(DEV_ACCESS_TOKEN_TTL_SECONDS * 1000 + 1000);
+    advance(FAKE_ACCESS_TOKEN_TTL_SECONDS * 1000 + 1000);
     expect(await provider.verifier.verify(dto.token)).toBeNull();
   });
 
   it("rejects a token signed by someone else", async () => {
-    const other = new DevAuthProvider(true);
+    const other = new FakeAuthProvider(true);
     await other.signUp(EMAIL, PASSWORD);
     const { session } = await other.signIn(EMAIL, PASSWORD);
     expect(await provider.verifier.verify(session.accessToken)).toBeNull();
@@ -65,7 +65,7 @@ describe("starting a session", () => {
 describe("refreshing", () => {
   it("rotates: a new pair comes back and the old refresh token is spent", async () => {
     const { user, dto: first } = await signIn();
-    advance(DEV_ACCESS_TOKEN_TTL_SECONDS * 1000);
+    advance(FAKE_ACCESS_TOKEN_TTL_SECONDS * 1000);
     const second = await refresh.execute(first.refreshToken!);
     expect(second.refreshToken).not.toBe(first.refreshToken);
     expect(await provider.verifier.verify(second.token)).toMatchObject({ sub: user.id });
@@ -76,7 +76,7 @@ describe("refreshing", () => {
   it("keeps working across many rotations", async () => {
     let { dto: session } = await signIn();
     for (let i = 0; i < 20; i++) {
-      advance(DEV_ACCESS_TOKEN_TTL_SECONDS * 1000);
+      advance(FAKE_ACCESS_TOKEN_TTL_SECONDS * 1000);
       session = await refresh.execute(session.refreshToken!);
     }
     expect(await provider.verifier.verify(session.token)).not.toBeNull();

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { itemFromRow, itemToRow, settingsFromRow, settingsToRow } from "../modules/alerts/infrastructure/supabase-alerts.repository";
 import { userFromRow, userToRow } from "../modules/identity/infrastructure/supabase-user.repository";
-import { InMemoryUserRepository } from "../modules/identity/infrastructure/in-memory.repositories";
+import { InMemoryUserRepository } from "./support/in-memory-identity";
 import { ProfileProvisioner } from "../modules/identity/application/profile-provisioner";
 import type { AlertItem, AlertSettings } from "../modules/alerts/domain/alert";
 import type { User } from "../modules/identity/domain/user";

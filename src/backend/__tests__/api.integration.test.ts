@@ -12,7 +12,17 @@ type Json = { data?: any; error?: { code: string; message: string } };
 
 let call: (method: string, path: string, opts?: { token?: string; body?: unknown; query?: string }) => Promise<{ status: number; json: Json }>;
 
+let fake: import("./support/fake-auth-provider").FakeAuthProvider;
+let profiles: import("./support/in-memory-identity").InMemoryUserRepository;
+
 beforeAll(async () => {
+  // The API keeps its data in Supabase; these tests swap in in-memory doubles for the storage and the auth provider.
+  const { inMemoryBackend } = await import("./support/in-memory-storage");
+  const { useBackendOverrides } = await import("../composition");
+  const doubles = inMemoryBackend();
+  fake = doubles.auth;
+  profiles = doubles.overrides.storage!.users as typeof profiles;
+  useBackendOverrides(doubles.overrides);
   process.env.ADMIN_EMAIL = ADMIN.email;
   process.env.S3_PUBLIC_BASE_URL = "https://files.example.test/";
 
@@ -39,10 +49,7 @@ beforeAll(async () => {
 
 const emailOf = (name: string) => `${name}@nearpaw.test`;
 /** Stands in for opening the confirmation link in the inbox. */
-const confirmEmail = async (name: string) => {
-  const { singleton } = await import("@/backend/shared/infrastructure/singleton");
-  singleton<{ confirm(email: string): void }>("dev_auth", () => { throw new Error("auth provider not created yet"); }).confirm(emailOf(name));
-};
+const confirmEmail = async (name: string) => fake.confirm(emailOf(name));
 /** Register, confirm the email and sign in, the way a person does in the app. */
 const signIn = async (name: string) => {
   expect((await call("POST", "auth/register", { body: { email: emailOf(name), password: PASSWORD, acceptedTerms: true } })).status).toBe(201);
@@ -111,9 +118,7 @@ describe("nearpaw backend", () => {
     await call("POST", "auth/register", { body });
     await confirmEmail("wulan.sari92");
     const session = (await call("POST", "auth/sign-in", { body: { email: body.email, password: PASSWORD } })).json.data;
-    const store = globalThis as unknown as Record<string, { users?: Map<string, unknown> }>;
-    const repo = store.__nearpaw_users_repo as unknown as { users?: Map<string, unknown> };
-    repo.users?.clear();
+    profiles.clear();
     expect((await call("GET", "me", { token: session.token })).status).toBe(200);
     expect((await call("POST", "auth/refresh", { body: { refreshToken: session.refreshToken } })).status).toBe(200);
   });

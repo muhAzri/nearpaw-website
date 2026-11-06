@@ -1,5 +1,5 @@
-import type { Allocation, ImpactPeriod } from "../domain/impact";
-import type { ImpactRepository } from "../domain/repositories";
+import type { Allocation, ImpactPeriod } from "../../modules/impact/domain/impact";
+import type { ImpactRepository } from "../../modules/impact/domain/repositories";
 
 export class InMemoryImpactRepository implements ImpactRepository {
   private readonly periods = new Map<string, ImpactPeriod>();

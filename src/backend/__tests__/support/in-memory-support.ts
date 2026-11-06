@@ -1,7 +1,6 @@
 import type { Page } from "@/backend/shared/domain/page";
-import type { SupportRepository } from "../domain/repositories";
-import type { PrivacyRequest, PrivacyStatus, SupportMessage, SupportStatus, SupportTopic } from "../domain/support";
-import type { Mailer } from "../application/support.usecases";
+import type { SupportRepository } from "../../modules/support/domain/repositories";
+import type { PrivacyRequest, PrivacyStatus, SupportMessage, SupportStatus, SupportTopic } from "../../modules/support/domain/support";
 
 const page = <T>(items: T[], offset: number, limit: number): Page<T> => ({ items: items.slice(offset, offset + limit), total: items.length });
 
@@ -45,12 +44,5 @@ export class InMemorySupportRepository implements SupportRepository {
   }
   async openPrivacy() {
     return [...this.privacy.values()].filter((r) => r.status === "received" || r.status === "verifying");
-  }
-}
-
-/** Until a mail provider is configured, replies are stored but reported as not delivered. */
-export class UnconfiguredMailer implements Mailer {
-  async send() {
-    return false;
   }
 }

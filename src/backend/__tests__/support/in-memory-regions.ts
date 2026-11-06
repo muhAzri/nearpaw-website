@@ -1,6 +1,6 @@
-import { DEFAULT_APP_CONFIG, type AppConfig } from "../domain/app-config";
-import type { Region } from "../domain/region";
-import type { AdPlacementRepository, ConfigRepository, RegionRepository } from "../domain/repositories";
+import { DEFAULT_APP_CONFIG, type AppConfig } from "../../modules/regions/domain/app-config";
+import type { Region } from "../../modules/regions/domain/region";
+import type { AdPlacementRepository, ConfigRepository, RegionRepository } from "../../modules/regions/domain/repositories";
 
 export class InMemoryRegionRepository implements RegionRepository {
   // Starts empty: regions are optional overrides the operator adds if and when needed.

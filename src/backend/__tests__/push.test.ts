@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AlertsService, type PushNotifier } from "../modules/alerts/application/alerts.usecases";
 import { FcmPushNotifier, fcmFromServiceAccount } from "../modules/alerts/infrastructure/fcm-push-notifier";
-import { InMemoryAlertRepository } from "../modules/alerts/infrastructure/in-memory-alerts.repository";
+import { InMemoryAlertRepository } from "./support/in-memory-alerts";
 
 type Call = { url: string; init: RequestInit };
 const reply = (status: number, body: unknown = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });

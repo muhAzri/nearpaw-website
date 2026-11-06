@@ -1,11 +1,15 @@
 import type { Page } from "@/backend/shared/domain/page";
-import type { BlockRepository, UserRepository, UserSearch } from "../domain/repositories";
-import { userLabel, type User } from "../domain/user";
+import type { BlockRepository, UserRepository, UserSearch } from "../../modules/identity/domain/repositories";
+import { userLabel, type User } from "../../modules/identity/domain/user";
 
 export class InMemoryUserRepository implements UserRepository {
   private readonly users = new Map<string, User>();
   private counter = 1000;
 
+  /** Test hook: forget every profile, like a fresh database. */
+  clear() {
+    this.users.clear();
+  }
   async nextPublicNumber() {
     return ++this.counter;
   }

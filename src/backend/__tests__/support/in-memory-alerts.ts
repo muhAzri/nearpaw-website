@@ -1,7 +1,6 @@
 import type { Page } from "@/backend/shared/domain/page";
-import type { AlertItem, AlertSettings } from "../domain/alert";
-import type { AlertRepository } from "../domain/repositories";
-import type { PushNotifier } from "../application/alerts.usecases";
+import type { AlertItem, AlertSettings } from "../../modules/alerts/domain/alert";
+import type { AlertRepository } from "../../modules/alerts/domain/repositories";
 
 export class InMemoryAlertRepository implements AlertRepository {
   private readonly settings = new Map<string, AlertSettings>();
@@ -54,15 +53,5 @@ export class InMemoryAlertRepository implements AlertRepository {
     this.settings.delete(userId);
     this.deviceTokens.delete(userId);
     this.items = this.items.filter((i) => i.userId !== userId);
-  }
-}
-
-/**
- * Placeholder until APNs credentials exist: reports "not delivered" so the dashboard's
- * failed counter is honest instead of pretending a push went out.
- */
-export class UnconfiguredPushNotifier implements PushNotifier {
-  async send() {
-    return { delivered: false, invalidTokens: [] };
   }
 }

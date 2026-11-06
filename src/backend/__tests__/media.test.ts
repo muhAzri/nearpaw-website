@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MEDIA_CONTENT_TYPE, MEDIA_MAX_BYTES, MEDIA_MAX_FILES, MEDIA_MAX_THUMBNAIL_BYTES } from "@/contracts";
 import { MediaUploads, UPLOAD_REQUESTS_PER_HOUR, type ObjectStorage } from "../modules/media/application/media.usecases";
 import { S3ObjectStorage } from "../modules/media/infrastructure/s3-object-storage";
-import { InMemoryRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
+import { InMemoryRateLimiter } from "./support/in-memory-rate-limiter";
 import { ForbiddenError, RateLimitedError, ServiceUnavailableError, ValidationError } from "@/backend/shared/domain/errors";
 import { MAX_FILES_PER_REQUEST, MAX_THUMBNAIL_BYTES, MAX_UPLOAD_BYTES, isOwnedMediaKey, isThumbnailKey, mediaKey, thumbnailKey } from "@/backend/shared/domain/media-key";
 
