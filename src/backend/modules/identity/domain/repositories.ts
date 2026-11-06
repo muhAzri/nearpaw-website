@@ -1,4 +1,5 @@
 import type { Page } from "@/backend/shared/domain/page";
+import type { RefreshToken, RevokedReason } from "./refresh-token";
 import type { User, UserStatus } from "./user";
 
 export interface UserSearch {
@@ -14,6 +15,15 @@ export interface UserRepository {
   findByPublicNumber(n: number): Promise<User | null>;
   save(user: User): Promise<void>;
   search(criteria: UserSearch): Promise<Page<User>>;
+}
+
+export interface RefreshTokenRepository {
+  save(token: RefreshToken): Promise<void>;
+  findByHash(hash: string): Promise<RefreshToken | null>;
+  revoke(hash: string, reason: RevokedReason, at: Date): Promise<void>;
+  /** Revokes every still-valid token of the family (sign-out, or reuse detected). */
+  revokeFamily(familyId: string, reason: RevokedReason, at: Date): Promise<void>;
+  revokeAllForUser(userId: string, reason: RevokedReason, at: Date): Promise<void>;
 }
 
 export interface BlockRepository {
