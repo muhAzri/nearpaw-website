@@ -5,6 +5,7 @@ import { SYSTEM_ACTOR } from "@/backend/shared/domain/principal";
 import { serverEnv } from "@/backend/shared/config/env";
 import { sharedRateLimiter } from "@/backend/shared/infrastructure/rate-limiter";
 import { singleton } from "@/backend/shared/infrastructure/singleton";
+import { supabaseAdmin } from "@/backend/shared/infrastructure/supabase-admin";
 import type { Authenticator } from "@/backend/shared/presentation/auth";
 import { AccountService, UserAdmin, UserQueries } from "./application/account.usecases";
 import { AdminLogin, PasswordAuthenticator, Register, RequestPasswordReset, ResendVerification, SignInWithPassword } from "./application/auth.usecases";
@@ -16,6 +17,8 @@ import { InMemoryLoginAttempts } from "./infrastructure/in-memory-login-attempts
 import { JwtAccessTokenVerifier } from "./infrastructure/jwt-access-token.verifier";
 import { SupabaseAuthProvider, UnconfiguredAuthProvider } from "./infrastructure/supabase-auth.provider";
 import { InMemoryBlockRepository, InMemoryUserRepository } from "./infrastructure/in-memory.repositories";
+import { SupabaseBlockRepository } from "./infrastructure/supabase-block.repository";
+import { SupabaseUserRepository } from "./infrastructure/supabase-user.repository";
 import { IdentityController } from "./presentation/identity.controller";
 
 /**
@@ -26,8 +29,10 @@ export function createIdentityModule(deps: { audit: AuditRecorder; clock?: Clock
   const env = serverEnv();
   const clock = deps.clock ?? systemClock;
 
-  const users = singleton("users_repo", () => new InMemoryUserRepository());
-  const blocks = singleton("blocks_repo", () => new InMemoryBlockRepository());
+  // Accounts live in Postgres when the secret key is set, otherwise in memory (lost on restart).
+  const db = supabaseAdmin();
+  const users = db ? new SupabaseUserRepository(db) : singleton("users_repo", () => new InMemoryUserRepository());
+  const blocks = db ? new SupabaseBlockRepository(db) : singleton("blocks_repo", () => new InMemoryBlockRepository());
   const attempts = singleton("login_attempts", () => new InMemoryLoginAttempts());
   // Supabase Auth when configured; an in-memory stand-in outside production so local work needs no project.
   const supabase = env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? { url: env.NEXT_PUBLIC_SUPABASE_URL, key: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY } : null;

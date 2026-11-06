@@ -18,6 +18,12 @@ export class InMemoryUserRepository implements UserRepository {
   async save(user: User) {
     this.users.set(user.id, user);
   }
+  async insertIfAbsent(user: User) {
+    const existing = this.users.get(user.id);
+    if (existing) return existing;
+    this.users.set(user.id, user);
+    return user;
+  }
   async search(c: UserSearch): Promise<Page<User>> {
     const q = c.q?.toLowerCase().replace(/^community\s*#?/, "").replace("#", "");
     const hits = [...this.users.values()]

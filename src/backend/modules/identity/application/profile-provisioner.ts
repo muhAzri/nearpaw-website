@@ -30,7 +30,6 @@ export class ProfileProvisioner {
       deletedAt: null,
       tombstoneId: null,
     };
-    await this.users.save(user);
-    return user;
+    return this.users.insertIfAbsent(user);
   }
 }

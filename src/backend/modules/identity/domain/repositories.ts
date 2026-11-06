@@ -13,6 +13,8 @@ export interface UserRepository {
   findById(id: string): Promise<User | null>;
   findByPublicNumber(n: number): Promise<User | null>;
   save(user: User): Promise<void>;
+  /** Creates the user unless one with that id exists; returns whichever row is stored. Safe under concurrent first requests. */
+  insertIfAbsent(user: User): Promise<User>;
   search(criteria: UserSearch): Promise<Page<User>>;
 }
 
