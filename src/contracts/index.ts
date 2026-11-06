@@ -7,5 +7,6 @@ export * from "./region.contract";
 export * from "./report.contract";
 export * from "./impact.contract";
 export * from "./alerts.contract";
+export * from "./media.contract";
 export * from "./support.contract";
 export * from "./audit.contract";
